@@ -12,7 +12,7 @@ import submitit
 
 def parse_args():
     classification_parser = classification.get_args_parser()
-    parser = argparse.ArgumentParser("Submitit for ViT", parents=[classification_parser])
+    parser = argparse.ArgumentParser("Submitit", parents=[classification_parser])
 
     # To use multiple nodes choose a configuration that uses the same number of gpus in each node
     parser.add_argument("--ngpus", default=4, type=int, help="Number of gpus to request on each node")
@@ -23,10 +23,8 @@ def parse_args():
     parser.add_argument("--job_dir", default="", type=str, help="Job dir. Leave empty for automatic.")
 
     parser.add_argument("--partition", default="microlab", type=str, help="Partition where to submit")
-    parser.add_argument('--comment', default="", type=str,
-                        help='Comment to pass to scheduler, e.g. priority message')
+    parser.add_argument('--comment', default="", type=str, help='Comment to pass to scheduler, e.g. priority message')
     return parser.parse_args()
-
 
 def get_shared_folder() -> Path:
     user = os.getenv("USER")
@@ -35,7 +33,6 @@ def get_shared_folder() -> Path:
     return p
     #raise RuntimeError("No shared folder available")
 
-
 def get_init_file():
     # Init file must not exist, but it's parent dir must exist.
     os.makedirs(str(get_shared_folder()), exist_ok=True)
@@ -43,7 +40,6 @@ def get_init_file():
     if init_file.exists():
         os.remove(str(init_file))
     return init_file
-
 
 class Trainer(object):
     def __init__(self, args):
@@ -65,7 +61,6 @@ class Trainer(object):
         self.args.rank = job_env.global_rank
         self.args.world_size = job_env.num_tasks
         print(f"Process group: {job_env.num_tasks} tasks, rank: {job_env.global_rank}")
-
 
 def main():
     args = parse_args()
@@ -94,7 +89,7 @@ def main():
         # Below are cluster dependent parameters
         slurm_partition=partition,
         slurm_signal_delay_s=120,
-        
+        slurm_additional_parameters={"nice": '0'},
         **kwargs
     )
     executor.update_parameters(name=args.job_name)
@@ -106,7 +101,6 @@ def main():
     job = executor.submit(trainer)
 
     print("Submitted job_id:", job.job_id)
-
 
 if __name__ == "__main__":
     main()

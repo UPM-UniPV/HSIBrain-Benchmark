@@ -54,15 +54,19 @@ def get_args_parser():
     parser.add_argument('--mlp-dim', default=4, type=int, help='Number of features in the mlp')
     parser.add_argument('--heads', default=16, type=int, help='Number of heads in the attention layers')
     parser.add_argument('--easyAtt', default=False, type=bool, help='Use EasyAttention instead of Attention')
-    parser.add_argument('--caf', default=True, type=bool, help='Use CAF')
+    parser.add_argument('--caf', default=False, type=bool, help='Use CAF')
     parser.add_argument('--dropPath-rate', default=0.1, type=float, help='DropPath rate')
 
     # ViT/ViM parameters
     parser.add_argument('--blocks', default=4, type=int, help='Number of blocks in the transformer')
-    parser.add_argument('--patch-size', default=9, type=int, help='Patch size')
+    parser.add_argument('--patch-size', default=1, type=int, help='Patch size')
     parser.add_argument('--embed-dim', default=64, type=int, help='Embeddings dimension')
     parser.add_argument('--classes', default=4, type=int, help='Number of classes to predict (default: 4)')
     parser.add_argument('--drop', type=float, default=0.1, metavar='PCT', help='Dropout rate (default: 0.1)')
+
+    # HSIMamba parameters
+    parser.add_argument('--deltat', default=0.01, type=float, help='Delta parameter for HSIMamba')
+    parser.add_argument('--output-dim', default=128, type=int, help='Output dimension of the HSIMamba model')
 
     # Optimizer parameters
     parser.add_argument('--opt', default='adamw', type=str, metavar='OPTIMIZER', help='Optimizer (default: "adamw"')
@@ -72,7 +76,12 @@ def get_args_parser():
     parser.add_argument('--opt-betas', default=None, type=float, nargs='+', metavar='BETA', help='Optimizer Betas (default: None, use opt default)')
     parser.add_argument('--weight-decay', type=float, default=5e-5, help='weight decay (default: 5e-5)')
     parser.add_argument('--momentum', type=float, default=0.9, metavar='M', help='SGD momentum (default: 0.9)')
-    
+
+    # Focal loss parameters
+    parser.add_argument('--alpha', type=float, default=0.5, help='Alpha parameter for focal loss (default: 0.5)')
+    parser.add_argument('--gamma', type=float, default=2, help='Gamma parameter for focal loss (default: 2)')
+    parser.add_argument('--reduction', type=str, default="mean", help='Reduction parameter for focal loss (default: "mean")')
+
     # Learning rate schedule parameters
     parser.add_argument('--sched', default='plateau', type=str, metavar='SCHEDULER', help='LR scheduler (default: "plateau"')
     parser.add_argument('--lr', type=float, default=5e-4, metavar='LR', help='learning rate (default: 5e-4)')
@@ -85,8 +94,8 @@ def get_args_parser():
     
     # Dataset parameters
     parser.add_argument('--db-name', default='madrid', type=str, help='dataset name')
-    parser.add_argument('--data-path', default='/home/domenico/Desktop/dataset_experiments/CUBES_cal_alt/', type=str, help='dataset path') #/home/domenico/Desktop/dataset_experiments/CUBES_cal_alt/
-    parser.add_argument('--gt-path', default='/home/domenico/Desktop/dataset_experiments/HSI_GT/npyFiles/', type=str, help='dataset path') #/home/domenico/Desktop/dataset_experiments/HSI_GT/npyFiles/
+    parser.add_argument('--data-path', default='/home/ragusa/ViT-G/datasets/Madrid/hsi/', type=str, help='dataset path') #/home/domenico/Desktop/dataset_experiments/CUBES_cal_alt/
+    parser.add_argument('--gt-path', default='/home/ragusa/ViT-G/datasets/Madrid/gt/', type=str, help='dataset path') #/home/domenico/Desktop/dataset_experiments/HSI_GT/npyFiles/
     parser.add_argument('--train_pcg', default='0.7', type=float, help='Train set split percentage')
     parser.add_argument('--val_pcg', default='0.2', type=float, help='Validation set split percentage')
     parser.add_argument('--densify_labels', default=[2,3], nargs='+', type=int, help="Labels to densify")
@@ -94,9 +103,8 @@ def get_args_parser():
 
     # Distributed training parameters
     parser.add_argument('--distributed', action='store_true', default=False, help='Enabling distributed training')
-    parser.add_argument('--world_size', default=1, type=int, help='number of distributed processes')
+    parser.add_argument('--world-size', default=1, type=int, help='number of distributed processes')
     parser.add_argument('--dist-eval', action='store_true', default=False, help='Enabling distributed evaluation')
-    parser.add_argument('--local-rank', default=0, type=int)
 
     # Mlflow parameters
     parser.add_argument('--sys-metrics', default=False, type=bool, help='Log system metrics')
@@ -117,8 +125,8 @@ def main(args):
     if tools.is_main_process():
         experiment_name = args.model_type
         experiment_description = f'{args.model_type} for brain tumor classification'
-        run_name = f'{args.model_type}-{args.db_name}-run-{datetime.now().strftime("%Y%m%d_%H%M%S")}'
-        run_description = f'Analyze the behavior of the {args.model_type} using a recent version of the Madrid HSI dataset.'
+        run_name = f'{args.job_name}_{args.model_type}-{args.db_name}-run-{datetime.now().strftime("%Y%m%d_%H%M%S")}' #args.job_name if run with submitit
+        run_description = f'Analyze the behavior of the {args.model_type} using a recent version of the {args.db_name} HSI dataset.'
         mlflow.set_experiment(experiment_name=experiment_name)
         mlflow.set_experiment_tag('mlflow.note.content', experiment_description)
 
@@ -207,8 +215,10 @@ def main(args):
     elif args.model_type == 'HSIMamba':
         model = nn.Sequential(
             models.extraLayers.PermuteLayer(0,2,3,1), #adapt the patch to the required input format (B, H, W, C)
-            HSIClassificationMambaModel(spatial_dim=args.patch_size, num_bands=cube_dims[2], hidden_dim=args.embed_dim, output_dim=128, delta_param_init=0.01, num_classes=4)
+            HSIClassificationMambaModel(spatial_dim=args.patch_size, num_bands=cube_dims[2], hidden_dim=args.embed_dim, output_dim=args.output_dim, delta_param_init=args.deltat, num_classes=args.classes)
         )
+    elif args.model_type == 'MamTrans':
+        print('Model not yet implemented')
     else:
         print('Model not found')
         exit()
@@ -230,7 +240,7 @@ def main(args):
     if args.criterion == 'cross_entropy':
         criterion = torch.nn.CrossEntropyLoss()
     elif args.criterion == 'focal':
-        criterion = FocalLoss(alpha=0.5, gamma=2, reduction='mean')
+        criterion = FocalLoss(alpha=args.alpha, gamma=args.gamma, reduction=args.reduction)
 
     # log
     if tools.is_main_process():
@@ -339,8 +349,10 @@ def main(args):
         elif args.model_type == 'HSIMamba':
             model = nn.Sequential(
             models.extraLayers.PermuteLayer(0,2,3,1),
-            HSIClassificationMambaModel(spatial_dim=args.patch_size, num_bands=cube_dims[2], hidden_dim=args.embed_dim, output_dim=128, delta_param_init=0.01, num_classes=4)
+            HSIClassificationMambaModel(spatial_dim=args.patch_size, num_bands=cube_dims[2], hidden_dim=args.embed_dim, output_dim=args.output_dim, delta_param_init=args.deltat, num_classes=args.classes)
             )
+        elif args.model_type == 'MamTrans':
+            print('Model not yet implemented')
         else:
             print('Model not found')
             exit()
