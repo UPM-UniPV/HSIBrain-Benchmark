@@ -9,6 +9,9 @@ from pathlib import Path
 import main as classification
 import submitit
 
+import warnings
+
+warnings.simplefilter("ignore", FutureWarning)
 
 def parse_args():
     classification_parser = classification.get_args_parser()

@@ -162,9 +162,10 @@ class ViT (nn.Module):
         self.blocks = nn.ModuleList([TBlock(embedDim, numHeads, mlp_dim, channels, easyAtt, dropout, dropPath) for _ in range(nBlocks)])
         
         #CAF
-        self.skipcat = nn.ModuleList([])
-        for _ in range(nBlocks-2):
-           self.skipcat.append(nn.Conv2d(channels+1, channels+1, [1, 2], 1, 0))
+        if self.caf != False:
+            self.skipcat = nn.ModuleList([])
+            for _ in range(nBlocks-2):
+                self.skipcat.append(nn.Conv2d(channels+1, channels+1, [1, 2], 1, 0))
 
         self.norm = nn.LayerNorm(embedDim)
         self.mlpHead = nn.Linear(embedDim, numClasses)

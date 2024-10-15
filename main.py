@@ -26,6 +26,7 @@ import numpy as np
 from models.ViT import ViT
 from models.vim.models_mamba import VisionMamba
 from models.HSIMamba import HSIClassificationMambaModel
+from models.hit import HiT, ConvPermuteMLP
 
 import models.extraLayers
 
@@ -38,13 +39,15 @@ import matplotlib.pyplot as plt
 import mlflow
 
 warnings.filterwarnings("ignore", category=UserWarning, module='torch.optim.lr_scheduler') #suppressing warning due to lr_scheduler accing current lr
-mlflow.set_tracking_uri(Path(f"/home/{os.getenv("USER")}/mlruns").as_uri())
+warnings.simplefilter("ignore", FutureWarning)
+
+#mlflow.set_tracking_uri(Path(f"/home/{os.getenv("USER")}/mlruns").as_uri())
 
 def get_args_parser():
     parser = argparse.ArgumentParser('Training and evaluation script', add_help=False)
 
     # Basic parameters
-    parser.add_argument('--model-type', default='HSIMamba', type=str, help='Model type (default: "ViT")')
+    parser.add_argument('--model-type', default='HiT', type=str, help='Model type (default: "ViT")')
     parser.add_argument('--batch-size', default=512, type=int, help='Batch size') #8192 to be used with LARS
     parser.add_argument('--epochs', default=1, type=int, help='Total epochs to run')
     parser.add_argument('--device', default='cuda', help='device to use for training / testing')
@@ -59,7 +62,7 @@ def get_args_parser():
 
     # ViT/ViM parameters
     parser.add_argument('--blocks', default=4, type=int, help='Number of blocks in the transformer')
-    parser.add_argument('--patch-size', default=1, type=int, help='Patch size')
+    parser.add_argument('--patch-size', default=9, type=int, help='Patch size')
     parser.add_argument('--embed-dim', default=64, type=int, help='Embeddings dimension')
     parser.add_argument('--classes', default=4, type=int, help='Number of classes to predict (default: 4)')
     parser.add_argument('--drop', type=float, default=0.1, metavar='PCT', help='Dropout rate (default: 0.1)')
@@ -70,7 +73,7 @@ def get_args_parser():
 
     # Optimizer parameters
     parser.add_argument('--opt', default='adamw', type=str, metavar='OPTIMIZER', help='Optimizer (default: "adamw"')
-    parser.add_argument('--use_larc', default=True, type=bool, help='Use LARC')
+    parser.add_argument('--use-larc', default=True, type=bool, help='Use LARC')
     parser.add_argument('--criterion', default='focal', type=str, help='Criterion (default: "focal")')
     parser.add_argument('--opt-eps', default=1e-8, type=float, metavar='EPSILON', help='Optimizer Epsilon (default: 1e-8)')
     parser.add_argument('--opt-betas', default=None, type=float, nargs='+', metavar='BETA', help='Optimizer Betas (default: None, use opt default)')
@@ -83,23 +86,27 @@ def get_args_parser():
     parser.add_argument('--reduction', type=str, default="mean", help='Reduction parameter for focal loss (default: "mean")')
 
     # Learning rate schedule parameters
-    parser.add_argument('--sched', default='plateau', type=str, metavar='SCHEDULER', help='LR scheduler (default: "plateau"')
-    parser.add_argument('--lr', type=float, default=5e-4, metavar='LR', help='learning rate (default: 5e-4)')
+    parser.add_argument('--sched', default='cosine', type=str, metavar='SCHEDULER', help='LR scheduler (default: "cosine"')
+    parser.add_argument('--lr', type=float, default=1e-3, metavar='LR', help='learning rate (default: 1e-3)')
+    parser.add_argument('--lr-noise', type=float, nargs='+', default=None, metavar='pct, pct', help='learning rate noise on/off epoch percentages')
+    parser.add_argument('--lr-noise-pct', type=float, default=0.67, metavar='PERCENT', help='learning rate noise limit percent (default: 0.67)')
+    parser.add_argument('--lr-noise-std', type=float, default=1.0, metavar='STDDEV', help='learning rate noise std-dev (default: 1.0)')
     parser.add_argument('--warmup-lr', type=float, default=1e-6, metavar='LR', help='warmup learning rate (default: 1e-6)')
-    parser.add_argument('--decay-epochs', type=float, default=30, metavar='N', help='epoch interval to decay LR')
+    parser.add_argument('--min-lr', type=float, default=1e-5, metavar='LR', help='lower lr bound for cyclic schedulers that hit 0 (1e-5)')
+    parser.add_argument('--decay-epochs', type=float, default=10, metavar='N', help='epoch interval to decay LR')
     parser.add_argument('--warmup-epochs', type=int, default=5, metavar='N', help='epochs to warmup LR, if scheduler supports')
-    parser.add_argument('--cooldown-epochs', type=int, default=10, metavar='N', help='epochs to cooldown LR at min_lr, after cyclic schedule ends')
+    parser.add_argument('--cooldown-epochs', type=int, default=5, metavar='N', help='epochs to cooldown LR at min_lr, after cyclic schedule ends')
     parser.add_argument('--patience-epochs', type=int, default=10, metavar='N', help='patience epochs for Plateau LR scheduler (default: 10')
     parser.add_argument('--decay-rate', '--dr', type=float, default=0.1, metavar='RATE', help='LR decay rate (default: 0.1)')
     
     # Dataset parameters
     parser.add_argument('--db-name', default='madrid', type=str, help='dataset name')
-    parser.add_argument('--data-path', default='/home/ragusa/ViT-G/datasets/Madrid/hsi/', type=str, help='dataset path') #/home/domenico/Desktop/dataset_experiments/CUBES_cal_alt/
-    parser.add_argument('--gt-path', default='/home/ragusa/ViT-G/datasets/Madrid/gt/', type=str, help='dataset path') #/home/domenico/Desktop/dataset_experiments/HSI_GT/npyFiles/
-    parser.add_argument('--train_pcg', default='0.7', type=float, help='Train set split percentage')
-    parser.add_argument('--val_pcg', default='0.2', type=float, help='Validation set split percentage')
-    parser.add_argument('--densify_labels', default=[2,3], nargs='+', type=int, help="Labels to densify")
-    parser.add_argument('--augment_labels', default=[2,3], nargs='+', type=int, help="Labels to augment")
+    parser.add_argument('--data-path', default='/home/domenico/Desktop/test/datasets/Madrid/hsi/', type=str, help='dataset path') #/home/domenico/Desktop/dataset_experiments/CUBES_cal_alt/
+    parser.add_argument('--gt-path', default='/home/domenico/Desktop/test/datasets/Madrid/gt/', type=str, help='dataset path') #/home/domenico/Desktop/dataset_experiments/HSI_GT/npyFiles/
+    parser.add_argument('--train-pcg', default='0.7', type=float, help='Train set split percentage')
+    parser.add_argument('--val-pcg', default='0.2', type=float, help='Validation set split percentage')
+    parser.add_argument('--densify-labels', default=[2,3], nargs='+', type=int, help="Labels to densify")
+    parser.add_argument('--augment-labels', default=[2,3], nargs='+', type=int, help="Labels to augment")
 
     # Distributed training parameters
     parser.add_argument('--distributed', action='store_true', default=False, help='Enabling distributed training')
@@ -110,7 +117,7 @@ def get_args_parser():
     parser.add_argument('--sys-metrics', default=False, type=bool, help='Log system metrics')
 
     # Other parameters
-    parser.add_argument('--num_workers', default=1, type=int)
+    parser.add_argument('--num-workers', default=1, type=int)
     parser.add_argument('--pin-mem', action='store_true', help='Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.')
     parser.add_argument('--no-pin-mem', action='store_false', dest='pin_mem', help='')
     parser.set_defaults(pin_mem=True)
@@ -121,16 +128,22 @@ def main(args):
     tools.init_distributed_mode(args)
     temp_dir = Path(f"./tmp") #cannot be mktmpdir because of distributed training, otherwise other threads not know where the trained model is when finished
 
+    experiment_name = args.model_type
+    experiment_description = f'{args.model_type} for brain tumor classification'
+    run_name = f'{args.job_name}_{args.model_type}-{args.db_name}-{args.patch_size}-run-{datetime.now().strftime("%Y%m%d_%H%M%S")}' #args.job_name if run with submitit
+    run_description = f'Analyze the behavior of the {args.model_type} using a recent version of the {args.db_name} HSI dataset.'
+
     #log
     if tools.is_main_process():
-        experiment_name = args.model_type
-        experiment_description = f'{args.model_type} for brain tumor classification'
-        run_name = f'{args.job_name}_{args.model_type}-{args.db_name}-run-{datetime.now().strftime("%Y%m%d_%H%M%S")}' #args.job_name if run with submitit
-        run_description = f'Analyze the behavior of the {args.model_type} using a recent version of the {args.db_name} HSI dataset.'
+        print(args)
         mlflow.set_experiment(experiment_name=experiment_name)
         mlflow.set_experiment_tag('mlflow.note.content', experiment_description)
 
     device = torch.device(args.device)
+
+    if args.distributed:
+        args.batch_size = int(args.batch_size / (args.ngpus*args.nodes))
+        args.num_workers = int((args.num_workers + (args.ngpus*args.nodes) - 1) / (args.ngpus*args.nodes))
 
     # fix the seed
     seed = args.seed
@@ -201,14 +214,14 @@ def main(args):
 
     data_loader_val = torch.utils.data.DataLoader(
         dataset_val, sampler=sampler_val,
-        batch_size=int(1.5 * args.batch_size * 20),
+        batch_size=args.batch_size,
         num_workers=args.num_workers,
         pin_memory=args.pin_mem,
         drop_last=False
     )
 
     if(args.model_type == 'ViT'):
-        model = ViT(patchSize=args.patch_size, nBlocks=args.blocks, mlp_dim=args.mlp_dim, caf=args.caf, easyAtt=args.easyAtt, numHeads=args.heads, embedDim=args.embed_dim, numClasses=args.classes, dropout=args.drop, dropPath=args.dropPath_rate)
+        model = ViT(patchSize=args.patch_size, nBlocks=args.blocks, mlp_dim=args.mlp_dim, caf=args.caf, easyAtt=args.easyAtt, numHeads=args.heads, embedDim=args.embed_dim, numClasses=args.classes, dropout=args.drop, dropPath=args.dropPath_rate, channels=cube_dims[2])
     elif args.model_type == 'ViM':
         model = VisionMamba(patch_size=args.patch_size, num_classes=args.classes, embed_dim=args.embed_dim, depth=args.blocks, drop_rate=args.drop, channels=cube_dims[2], rms_norm=True, residual_in_fp32=True, fused_add_norm=True, final_pool_type='mean', if_abs_pos_embed=True, if_rope=False, if_rope_residual=False, bimamba_type="v2", if_cls_token=True, if_divide_out=True, use_middle_cls_token=False)
         model.patch_embed = models.extraLayers.PatchEmbedding(args.patch_size, args.embed_dim) #changes the patchembedding layer to adapt to the input format
@@ -219,6 +232,14 @@ def main(args):
         )
     elif args.model_type == 'MamTrans':
         print('Model not yet implemented')
+    elif args.model_type == 'HiT':
+        model = nn.Sequential(
+            models.extraLayers.AddDimensionLayer(1),
+            HiT([4,3,14,3], img_size=args.patch_size, patch_size=3, in_chans=cube_dims[2], num_classes=4,
+                 embed_dims=[56, 56, 88, 88], transitions=[False, True, False, False], segment_dim=[8,8,4,4], mlp_ratios=[3,3,3,3], skip_lam=1.0,
+                 qkv_bias=False, qk_scale=None, drop_rate=0.1, attn_drop_rate=0.1, drop_path_rate=0.1,
+                 norm_layer=nn.LayerNorm, mlp_fn=ConvPermuteMLP) #Doesn't work for single pixels, only for patches to capturre spatial information
+        )
     else:
         print('Model not found')
         exit()
@@ -276,7 +297,7 @@ def main(args):
         # log
         training_log_stats = {**{f'training_{k}': v for k, v in train_stats.items()},
                     f'validation_avg_loss': val_stats["avg_loss"],
-                    f'learningRate': optimizer.param_groups[0]['lr']}
+                    f'learningRate': _optimizer.param_groups[0]['lr']}
         validation_metrics_stats = {**{f'validation_{k}': v for k, v in val_stats.items() if k != 'cm' and k != 'avg_loss'}}
     
         if tools.is_main_process():
@@ -302,7 +323,13 @@ def main(args):
             mlflow.log_metrics(validation_metrics_stats, epoch)
 
         #to next epoch
-        lr_scheduler.step(val_stats["avg_loss"]) 
+        if args.sched == 'plateau':
+            lr_scheduler.step(val_stats["avg_loss"])
+        elif args.sched == 'cosine':
+            lr_scheduler.step(epoch)
+        else:
+            print('Scheduler not found')
+            lr_scheduler.step()
 
     # log and register model
     if tools.is_main_process():
@@ -315,6 +342,40 @@ def main(args):
         signature = mlflow.models.signature.infer_signature(X_sample.cpu().numpy(), y_sample.cpu().detach().numpy())
 
         mlflow.pytorch.log_model(model_to_save, f'{args.model_type}_best_model_{run_name}', signature=signature, registered_model_name=f'best_model_{run_name}')
+
+    if args.distributed:
+        dist.barrier()
+
+    if(args.model_type == 'ViT'):
+        model = ViT(patchSize=args.patch_size, nBlocks=args.blocks, mlp_dim=args.mlp_dim, caf=args.caf, easyAtt=args.easyAtt, numHeads=args.heads, embedDim=args.embed_dim, numClasses=args.classes, dropout=args.drop, dropPath=args.dropPath_rate, channels=cube_dims[2])
+    elif args.model_type == 'ViM':
+        model = VisionMamba(patch_size=args.patch_size, num_classes=args.classes, embed_dim=args.embed_dim, depth=args.blocks, drop_rate=args.drop, channels=cube_dims[2], rms_norm=True, residual_in_fp32=True, fused_add_norm=True, final_pool_type='mean', if_abs_pos_embed=True, if_rope=False, if_rope_residual=False, bimamba_type="v2", if_cls_token=True, if_divide_out=True, use_middle_cls_token=True)
+        model.patch_embed = models.extraLayers.PatchEmbedding(args.patch_size, args.embed_dim)
+    elif args.model_type == 'HSIMamba':
+        model = nn.Sequential(
+            models.extraLayers.PermuteLayer(0,2,3,1),
+            HSIClassificationMambaModel(spatial_dim=args.patch_size, num_bands=cube_dims[2], hidden_dim=args.embed_dim, output_dim=args.output_dim, delta_param_init=args.deltat, num_classes=args.classes)
+        )
+    elif args.model_type == 'MamTrans':
+        print('Model not yet implemented')
+    elif args.model_type == 'HiT':
+        model = nn.Sequential(
+            models.extraLayers.AddDimensionLayer(1),
+            HiT([4,3,14,3], img_size=args.patch_size, patch_size=3, in_chans=cube_dims[2], num_classes=4,
+                embed_dims=[56, 56, 88, 88], transitions=[False, True, False, False], segment_dim=[8,8,4,4], mlp_ratios=[3,3,3,3], skip_lam=1.0,
+                qkv_bias=False, qk_scale=None, drop_rate=0.1, attn_drop_rate=0.1, drop_path_rate=0.1,
+                norm_layer=nn.LayerNorm, mlp_fn=ConvPermuteMLP)
+        )
+    else:
+        print('Model not found')
+        exit()
+
+    model.load_state_dict(torch.load(os.path.join(temp_dir,f'{args.model_type}_best_model_{run_name}.pth'), weights_only=True))
+    model.to(device)
+
+    if args.distributed:
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
+        model_without_ddp = model.module
 
     #TESTING
     for test_image in test_ids:
@@ -332,37 +393,11 @@ def main(args):
 
         data_loader_test = torch.utils.data.DataLoader(
             dataset_test, sampler=sampler_test,
-            batch_size=int(1.5 * args.batch_size * 20),
+            batch_size=args.batch_size,
             num_workers=args.num_workers,
             pin_memory=args.pin_mem,
             drop_last=False
         )
-
-        if args.distributed:
-            dist.barrier()
-
-        if(args.model_type == 'ViT'):
-            model = ViT(patchSize=args.patch_size, nBlocks=args.blocks, mlp_dim=args.mlp_dim, caf=args.caf, easyAtt=args.easyAtt, numHeads=args.heads, embedDim=args.embed_dim, numClasses=args.classes, dropout=args.drop, dropPath=args.dropPath_rate)
-        elif args.model_type == 'ViM':
-            model = VisionMamba(patch_size=args.patch_size, num_classes=args.classes, embed_dim=args.embed_dim, depth=args.blocks, drop_rate=args.drop, channels=cube_dims[2], rms_norm=True, residual_in_fp32=True, fused_add_norm=True, final_pool_type='mean', if_abs_pos_embed=True, if_rope=False, if_rope_residual=False, bimamba_type="v2", if_cls_token=True, if_divide_out=True, use_middle_cls_token=True)
-            model.patch_embed = models.extraLayers.PatchEmbedding(args.patch_size, args.embed_dim)
-        elif args.model_type == 'HSIMamba':
-            model = nn.Sequential(
-            models.extraLayers.PermuteLayer(0,2,3,1),
-            HSIClassificationMambaModel(spatial_dim=args.patch_size, num_bands=cube_dims[2], hidden_dim=args.embed_dim, output_dim=args.output_dim, delta_param_init=args.deltat, num_classes=args.classes)
-            )
-        elif args.model_type == 'MamTrans':
-            print('Model not yet implemented')
-        else:
-            print('Model not found')
-            exit()
-
-        model.load_state_dict(torch.load(os.path.join(temp_dir,f'{args.model_type}_best_model_{run_name}.pth'), weights_only=True))
-        model.to(device)
-
-        if args.distributed:
-            model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
-            model_without_ddp = model.module
         
         test_preds, test_stats = test_evaluate(data_loader_test, model, device, args)
 
