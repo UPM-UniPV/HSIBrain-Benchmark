@@ -49,6 +49,21 @@ def augment_patches(samps, labs):
 		
 	return aug_samps, aug_labs
 
+def getImageProb(data, height, width):
+    colormap = np.array([
+        [0,255,0],
+        [255,0,0],
+        [0,0,255],
+        [255,182,193]
+    ])
+
+    npimg = np.zeros((height, width, 3))
+
+    for class_index in range(4):
+        npimg += data[:, :, class_index][:, :, np.newaxis] * colormap[class_index]
+
+    return npimg.astype('uint8')
+
 def getImage(data, height, width):
     colorIndex = {0:[0,255,0],1:[255,0,0],2:[0,0,255],3:[255,182,193]}
 
@@ -58,7 +73,7 @@ def getImage(data, height, width):
             npimg[y, x, :] = colorIndex.get(data[y][x], [0, 0, 0])
     return npimg
 
-def min_max_norm_val(hsi_path, gt_path, imageList, cube_dims):
+def min_max_norm_val(hsi_path, gt_path, imageList, channels):
     samples = []
     
     for imgID in imageList:
@@ -73,8 +88,8 @@ def min_max_norm_val(hsi_path, gt_path, imageList, cube_dims):
 
 	# train_set = SG_filter(train_set)
 
-    min_vect = np.amin(train_set, axis=0).reshape(1,1,cube_dims[2])
-    max_vect = np.amax(train_set, axis=0).reshape(1,1,cube_dims[2])
+    min_vect = np.amin(train_set, axis=0).reshape(1, 1, channels)
+    max_vect = np.amax(train_set, axis=0).reshape(1, 1, channels)
 
     return min_vect, max_vect
 
@@ -111,7 +126,7 @@ def get_cube_and_GT(idp, data_path, gt_path, patch_size, minMaxVects):
     samps = np.moveaxis(data, -1, 1)
     gt = gt.reshape(H*W)
         
-    return samps, gt
+    return samps, gt, [H,W]
 
 def loadImagesData(hsi_path, gt_path, imglist, patch_size, labelsToDensify, labelsToAugment, minMaxVects):
     data_samps = []

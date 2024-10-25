@@ -194,7 +194,7 @@ class ConvPermuteMLP(nn.Module):
     def __init__(self, dim, segment_dim=8, qkv_bias=True, qk_scale=None, attn_drop=0., proj_drop=0.):
         super().__init__()
         self.segment_dim = segment_dim
-        self.conv = nn.Conv2d(dim, dim, kernel_size=1, bias=qkv_bias)
+        #self.conv = nn.Conv2d(dim, dim, kernel_size=1, bias=qkv_bias)
 
         self.mlp_c = nn.Sequential(
             nn.Conv2d(dim, dim, kernel_size=(1, 3), stride=1, padding=(0, 1), dilation=1, groups=dim, bias=qkv_bias),
@@ -214,7 +214,8 @@ class ConvPermuteMLP(nn.Module):
 
     def forward(self, x):
         B, H, W, C = x.shape
-        x1 = x.reshape(B, H, W, C).permute(0, 3, 1, 2).reshape(B, C, H, W)
+        x1 = x.permute(0, 3, 1, 2)
+
         h = self.mlp_c(x1)
         w = self.mlp_h(x1)
         c = self.mlp_w(x1)
@@ -257,11 +258,16 @@ class PatchEmbed(nn.Module):
     """ Image to Patch Embedding
     """
 
-    def __init__(self, img_size=15, patch_size=3, in_chans=3, embed_dim=16):
+    def __init__(self, img_size=15, patch_size=3, in_chans=3, embed_dim=16, large_features=False):
         super().__init__()
-        #### for GRSS (10, 9) pu(15,9)step(2,1) XA(46,30) for in(20,16)
-        self.proj1_1 = Dynamic_conv3d(in_planes=1, out_planes=4, kernel_size=(3, 3, 3), ratio=8, stride=(2, 2, 2), padding=1, )
-        self.proj2_1 = Dynamic_conv3d(in_planes=4, out_planes=8, kernel_size=(3, 3, 3), ratio=8, stride=(2, 1, 1), padding=1, )
+
+        if large_features:
+            self.proj1_1 = Dynamic_conv3d(in_planes=1, out_planes=4, kernel_size=(2, 3, 3), ratio=8, stride=(1, 2, 2), padding=(4,1,1) )
+            self.proj2_1 = Dynamic_conv3d(in_planes=4, out_planes=8, kernel_size=(4, 3, 3), ratio=8, stride=(2, 1, 1), padding=1 )
+        else:
+            self.proj1_1 = Dynamic_conv3d(in_planes=1, out_planes=4, kernel_size=(3, 3, 3), ratio=8, stride=(2, 2, 2), padding=1, )
+            self.proj2_1 = Dynamic_conv3d(in_planes=4, out_planes=8, kernel_size=(3, 3, 3), ratio=8, stride=(2, 1, 1), padding=1, )
+        
     def forward(self, x):
         x = self.proj1_1(x)
         x = self.proj2_1(x)
@@ -306,13 +312,13 @@ class HiT(nn.Module):
     def __init__(self, layers, img_size=15, patch_size=3, in_chans=3, num_classes=1000,
                  embed_dims=None, transitions=None, segment_dim=None, mlp_ratios=None, skip_lam=1.0,
                  qkv_bias=False, qk_scale=None, drop_rate=0.1, attn_drop_rate=0.1, drop_path_rate=0.1,
-                 norm_layer=nn.LayerNorm, mlp_fn=ConvPermuteMLP):
+                 norm_layer=nn.LayerNorm, mlp_fn=ConvPermuteMLP, large_features=False):
 
         super().__init__()
         self.num_classes = num_classes
 
         self.patch_embed = PatchEmbed(img_size=img_size, patch_size=patch_size, in_chans=in_chans,
-                                      embed_dim=embed_dims[0])
+                                      embed_dim=embed_dims[0], large_features=large_features)
 
         network = []
         for i in range(len(layers)):
@@ -335,7 +341,7 @@ class HiT(nn.Module):
         self.head = nn.Linear(embed_dims[-1], num_classes) if num_classes > 0 else nn.Identity()
         self.apply(self._init_weights)
         self.pooling = nn.AdaptiveAvgPool2d(1)
-        self.conv_cls_head = nn.Linear(368, num_classes)
+        #self.conv_cls_head = nn.Linear(368, num_classes)
 
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):

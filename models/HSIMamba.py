@@ -45,8 +45,8 @@ class HSIVimBlock(nn.Module):
         z_proj = self.linear_z(x)
 
         # Ensure correct reshaping for Conv1d compatibility
-        x_proj = x_proj.view(Batch, self.hidden_dim, -1)
-        z_proj = z_proj.view(Batch, self.hidden_dim, -1)
+        x_proj = x_proj.contiguous().view(Batch, self.hidden_dim, -1)
+        z_proj = z_proj.contiguous().view(Batch, self.hidden_dim, -1)
 
         # Reverse z_proj for the backward path
         z_proj_reversed = torch.flip(z_proj, dims=[-1])
@@ -127,7 +127,7 @@ class HSIClassificationMambaModel(nn.Module):
     def forward(self, x):
         x = self.vim_block(x)
         # This is a placeholder. Actual reshaping depends on the output of HSIVimBlock and the input expectation of SpatialFeatureProcessing
-        x = x.view(-1, self.output_dim, 1, 1)  # Reshape to include spatial dimensions if needed
+        x = x.contiguous().view(-1, self.output_dim, 1, 1)  # Reshape to include spatial dimensions if needed
         x = self.spatial_processing(x)
 
         # Flatten the output from spatial processing if it's not already flat

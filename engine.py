@@ -13,14 +13,15 @@ import numpy as np
 
 def calculate_metrics(preds, labels):
     val_preds_softmax = torch.softmax(preds, dim=1).cpu().numpy()
-    val_preds_argmax = torch.argmax(preds, dim=1).cpu().numpy()
+    val_preds_argmax = np.argmax(val_preds_softmax, axis=1)
+    #al_preds_argmax = torch.argmax(preds, dim=1).cpu().numpy()
     val_labels = labels.cpu().numpy()
 
     correct = (val_preds_argmax == val_labels).sum().item()
 
-    precision = precision_score(val_labels, val_preds_argmax, average='macro', zero_division=0)
-    recall = recall_score(val_labels, val_preds_argmax, average='macro', zero_division=0)
-    f1 = f1_score(val_labels, val_preds_argmax, average='macro', zero_division=0)
+    precision = precision_score(val_labels, val_preds_argmax, average='micro', zero_division=0)
+    recall = recall_score(val_labels, val_preds_argmax, average='micro', zero_division=0)
+    f1 = f1_score(val_labels, val_preds_argmax, average='micro', zero_division=0)
 
     cm = confusion_matrix(val_labels, val_preds_argmax)
 
@@ -34,7 +35,8 @@ def calculate_metrics(preds, labels):
 
 def calculate_test_metrics(preds, labels):
     test_preds_softmax = torch.softmax(preds,dim=1).cpu().numpy()
-    test_preds_argmax = torch.argmax(preds, dim=1).cpu().numpy()
+    test_preds_argmax = np.argmax(test_preds_softmax, axis=1)
+    #test_preds_argmax = torch.argmax(preds, dim=1).cpu().numpy()
     test_labels = labels.cpu().numpy()
 
     correct = (test_preds_argmax == test_labels).sum().item()
@@ -42,20 +44,20 @@ def calculate_test_metrics(preds, labels):
 
     #overall
     accuracy = correct / len(test_labels)
-    precision = precision_score(test_labels, test_preds_argmax, average='macro', zero_division=0)
-    recall = recall_score(test_labels, test_preds_argmax, average='macro', zero_division=0)
-    f1 = f1_score(test_labels, test_preds_argmax, average='macro', zero_division=0)
+    precision = precision_score(test_labels, test_preds_argmax, average='micro', zero_division=0)
+    recall = recall_score(test_labels, test_preds_argmax, average='micro', zero_division=0)
+    f1 = f1_score(test_labels, test_preds_argmax, average='micro', zero_division=0)
 
     #roc per class + overall
     roc_per_class = []
     roc_auc = 0.0
-    if(len(np.unique(test_labels)) == 4):
+    if(len(np.unique(test_labels)) == 4): #if all classes are present
         roc_per_class = roc_auc_score(test_labels, test_preds_softmax, multi_class='ovr', average='weighted', labels=[0,1,2,3])
         roc_auc = roc_auc_score(test_labels, test_preds_softmax, multi_class='ovo', average='weighted', labels=[0,1,2,3])
 
     #per class
     precision_class, recall_class, fscore_class, support = precision_recall_fscore_support(test_labels, test_preds_argmax, beta=1.0, average=None, zero_division=0)
-    per_class_accuracy = cm.diagonal() / cm.sum(axis=1)
+    per_class_accuracy = np.where(cm.sum(axis=1) == 0, 0, cm.diagonal() / cm.sum(axis=1))
 
     kappa_score = cohen_kappa_score(test_labels, test_preds_argmax)
 
@@ -164,4 +166,4 @@ def test_evaluate(data_loader, model, device, args):
 
     kappa_score, precision, recall, f1, accuracy, roc_auc, cm, per_class_accuracy, precision_class, recall_class, fscore_class, roc_per_class, support = calculate_test_metrics(test_preds_noback, test_labels)
     
-    return torch.argmax(test_preds, dim=1), {"kappa_score": kappa_score, "precision":precision, "recall":recall, "f1score": f1, "oacc":accuracy, "rocauc":roc_auc, "cm":cm, "per_class_accuracy":per_class_accuracy, "precision_class":precision_class, "recall_class":recall_class, "fscore_class":fscore_class, "roc_class":roc_per_class, "support":support}
+    return torch.softmax(test_preds, dim=1) , {"kappa_score": kappa_score, "precision":precision, "recall":recall, "f1score": f1, "oacc":accuracy, "rocauc":roc_auc, "cm":cm, "per_class_accuracy":per_class_accuracy, "precision_class":precision_class, "recall_class":recall_class, "fscore_class":fscore_class, "roc_class":roc_per_class, "support":support}

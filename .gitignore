@@ -164,3 +164,7 @@ cython_debug/
 tmp/
 extra/
 datasets/
+mlruns/
+runs/
+sbatch.sh
+test.ipynb

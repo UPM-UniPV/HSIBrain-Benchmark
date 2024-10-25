@@ -1,4 +1,4 @@
-causal_conv1d==1.1.0
+causal_conv1d==1.1.0 #1.4.0 for MamTrans
 einops==0.8.0
 kornia==0.7.3
 mamba_ssm==1.2.2

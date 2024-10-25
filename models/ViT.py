@@ -70,26 +70,96 @@ class Attention(nn.Module):
 """
 Easy Attention as https://arxiv.org/pdf/2308.12874
 """
-class EasyAttention(nn.Module):
-    def __init__(self, embedDim, heads, dropout, channels):
-        super().__init__()
-        self.heads = heads
-        self.headDim = embedDim // heads
+class DenseEasyAttn(nn.Module):
+    
+    def __init__(self,  d_model, 
+                        seqLen,
+                        num_head,) -> None:
+        """
+        Dense Easy attention mechansim used in transformer model for the time-series prediction and reconstruction
         
-        self.attn = nn.Parameter(torch.rand(heads, channels+1, channels+1))
-        self.v = nn.Linear(embedDim, embedDim)
+        Args:
 
-        self.drop = nn.Dropout(dropout)
+            d_model     :   The embedding dimension for the input tensor 
+            
+            seqLen      :   The length of the sequence 
 
-    def forward(self, x):
-        B, GS, _ = x.shape
+            num_head    :   The number of head to be used for multi-head attention
+    
+        """
+        super(DenseEasyAttn,self).__init__()
+     
+        assert d_model % num_head == 0, "dmodel must be divible by number of heads"
 
-        attn = self.attn.expand(B, -1, -1, -1)
-        Wv = self.v(x).reshape(B, GS, self.heads, self.headDim).permute(0, 2, 1, 3)
+        self.d_model    =   d_model
+        self.d_k        =   d_model // num_head
+        self.num_heads  =   num_head
+        # Create the tensors
+        self.Alpha      = nn.Parameter(torch.randn(size=(num_head,seqLen+1,d_model),dtype=torch.float),requires_grad=True)  #seqLen+1          
+        self.WV         = nn.Parameter(torch.randn(size=(d_model,seqLen+1)       ,dtype=torch.float),requires_grad=True) #dmodel            
+        # Initialisation
+        nn.init.xavier_uniform_(self.Alpha)
+        nn.init.xavier_uniform_(self.WV)
+    
+    def split_heads(self, x):
+        """
+        Split the sequence into multi-heads 
 
-        x = (attn @ Wv).transpose(1, 2).flatten(2)
-        x = self.drop(x)
+        Args:
+            x   : Input sequence shape = [B, S, N]
+        
+        Returns:
+            x   : sequence with shape = [B, H, S, N//H]
+        """
+        batch_size, seq_length, d_model = x.size()
+        return x.contiguous().view(batch_size, seq_length, self.num_heads, self.d_k).transpose(1, 2)
+    
+    def combine_heads(self, x):
+        """
+        Combine the sequence into multi-heads 
 
+        Args:
+            x   : Input sequence shape = [B, H, S, N//H]
+        
+        Returns:
+            x   : sequence with shape = [B, S, N]
+        """
+        batch_size, _, seq_length, d_k = x.size()
+        return x.transpose(1, 2).contiguous().view(batch_size, seq_length, self.d_model)
+        
+ 
+    def forward(self,x:torch.Tensor):   
+        """
+        Forward prop for the easyattention module 
+        
+        Following the expression:  x_hat    =   Alpha @ Wv @ x 
+
+        Args:  
+            
+            self    :   The self objects
+
+            x       :   A tensor of Input data
+        
+        Returns:
+            
+            x       :   The tensor be encoded by the moudle
+        
+        """
+        # Obtain the value of batch size 
+        B,_,_   =   x.shape
+        # We repeat the tensor into same number of batch size that input has 
+        Wv      =   self.WV.repeat(B,1,1)    
+        # Implement matmul along the batch 
+        V       =   torch.bmm(Wv,x)
+        # Split heads for value
+        V_h     =   self.split_heads(V)
+        # Implement the learnable attention tensor 
+        Alpha   =   self.Alpha.repeat(B,1,1,1)
+        # Gain Attention by matrix multiplication
+        x       =   Alpha @ V_h
+        # Combine the output back to the original size
+        x       =   self.combine_heads(x)
+        
         return x
 
 '''
@@ -106,7 +176,7 @@ class TBlock(nn.Module):
         if easyAtt == False:
             self.attn = Attention(embedDim, heads, dropout)
         else:
-            self.attn = EasyAttention(embedDim, heads, dropout, channels)
+            self.attn = DenseEasyAttn(embedDim, channels, heads)
 
         self.mlp = FeedForward(embedDim, mlp_dim, dropout)
 
