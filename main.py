@@ -86,9 +86,7 @@ def get_args_parser():
     parser.add_argument('--momentum', type=float, default=0.9, metavar='M', help='SGD momentum (default: 0.9)')
 
     # Focal loss parameters
-    parser.add_argument('--alpha', type=float, default=0.5, help='Alpha parameter for focal loss (default: 0.5)')
     parser.add_argument('--gamma', type=float, default=2, help='Gamma parameter for focal loss (default: 2)')
-    parser.add_argument('--reduction', type=str, default="mean", help='Reduction parameter for focal loss (default: "mean")')
 
     # Learning rate schedule parameters
     parser.add_argument('--sched', default='cosine', type=str, metavar='SCHEDULER', help='LR scheduler (default: "cosine"')
@@ -106,8 +104,8 @@ def get_args_parser():
     
     # Dataset parameters
     parser.add_argument('--db-name', default='madrid', type=str, help='dataset name')
-    parser.add_argument('--data-path', default='/home/domenico/Desktop/dataset_experiments/CUBES_cal_alt/', type=str, help='dataset path') #/home/domenico/Desktop/dataset_experiments/CUBES_cal_alt/
-    parser.add_argument('--gt-path', default='/home/domenico/Desktop/dataset_experiments/HSI_GT/npyFiles/', type=str, help='dataset path') #/home/domenico/Desktop/dataset_experiments/HSI_GT/npyFiles/
+    parser.add_argument('--data-path', default='/home/domenico/Desktop/test_modelli/datasets/Madrid/hsi/', type=str, help='dataset path') #/home/domenico/Desktop/dataset_experiments/CUBES_cal_alt/
+    parser.add_argument('--gt-path', default='/home/domenico/Desktop/test_modelli/datasets/Madrid/gt/', type=str, help='dataset path') #/home/domenico/Desktop/dataset_experiments/HSI_GT/npyFiles/
     parser.add_argument('--channels', type=int, default=25, help='Number of channels in the dataset')
     parser.add_argument('--train-pcg', default='0.7', type=float, help='Train set split percentage')
     parser.add_argument('--val-pcg', default='0.2', type=float, help='Validation set split percentage')
@@ -178,6 +176,15 @@ def main(args):
 
     train_data, train_labels = tools.loadImagesData(args.data_path, args.gt_path, train_ids, patch_size=args.patch_size, labelsToDensify=args.densify_labels, labelsToAugment=args.augment_labels, minMaxVects=[min_vect, max_vect])
     val_data, val_labels = tools.loadImagesData(args.data_path, args.gt_path, validation_ids, patch_size=args.patch_size, labelsToDensify=[], labelsToAugment=[], minMaxVects=[min_vect, max_vect])
+
+
+    unique, counts = np.unique(np.concatenate((train_labels, val_labels)), return_counts=True)
+
+    total_count = len(train_labels) + len(val_labels)
+    class_weights = {int(cls): total_count / count for cls, count in zip(unique, counts)}
+
+    weights = [class_weights[i] for i in range(len(class_weights))]
+    class_weights_tensor = torch.tensor(weights, dtype=torch.float32, device=device)
 
     train_data=torch.from_numpy(train_data).type(torch.FloatTensor)
     train_labels=torch.from_numpy(train_labels).type(torch.LongTensor)
@@ -272,9 +279,11 @@ def main(args):
 
     if args.criterion == 'cross_entropy':
         criterion = torch.nn.CrossEntropyLoss()
+    elif args.criterion == 'weighted_cross_entropy':
+        criterion = torch.nn.CrossEntropyLoss(weight=class_weights_tensor)   
     elif args.criterion == 'focal':
-        criterion = FocalLoss(alpha=args.alpha, gamma=args.gamma, reduction=args.reduction)
-
+        criterion = FocalLoss(alpha=None, reduction='mean', gamma=args.gamma, weight=class_weights_tensor)
+        
     # log
     if tools.is_main_process():
         mlflow.start_run(log_system_metrics=args.sys_metrics, run_name=run_name, description=run_description)
