@@ -53,7 +53,7 @@ def get_args_parser():
     parser.add_argument('--batch-size', default=512, type=int, help='Batch size') #8192 to be used with LARS
     parser.add_argument('--epochs', default=1, type=int, help='Total epochs to run')
     parser.add_argument('--device', default='cuda', help='device to use for training / testing')
-    parser.add_argument('--seed', default=0, type=int)
+    parser.add_argument('--seed', default=12, type=int)
 
     # ViT parameters
     parser.add_argument('--mlp-dim', default=4, type=int, help='Number of features in the mlp')
@@ -67,7 +67,7 @@ def get_args_parser():
     parser.add_argument('--patch-size', default=9, type=int, help='Patch size')
     parser.add_argument('--embed-dim', default=64, type=int, help='Embeddings dimension')
     parser.add_argument('--classes', default=4, type=int, help='Number of classes to predict (default: 4)')
-    parser.add_argument('--drop', type=float, default=0.1, metavar='PCT', help='Dropout rate (default: 0.1)')
+    parser.add_argument('--drop', type=float, default=0.2, metavar='PCT', help='Dropout rate (default: 0.1)')
 
     # HSIMamba parameters
     parser.add_argument('--deltat', default=0.01, type=float, help='Delta parameter for HSIMamba')

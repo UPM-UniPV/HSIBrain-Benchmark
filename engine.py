@@ -19,9 +19,9 @@ def calculate_metrics(preds, labels):
 
     correct = (val_preds_argmax == val_labels).sum().item()
 
-    precision = precision_score(val_labels, val_preds_argmax, average='micro', zero_division=0)
-    recall = recall_score(val_labels, val_preds_argmax, average='micro', zero_division=0)
-    f1 = f1_score(val_labels, val_preds_argmax, average='micro', zero_division=0)
+    precision = precision_score(val_labels, val_preds_argmax, average='weighted', zero_division=0)
+    recall = recall_score(val_labels, val_preds_argmax, average='weighted', zero_division=0)
+    f1 = f1_score(val_labels, val_preds_argmax, average='weighted', zero_division=0)
 
     cm = confusion_matrix(val_labels, val_preds_argmax)
 
@@ -44,9 +44,9 @@ def calculate_test_metrics(preds, labels):
 
     #overall
     accuracy = correct / len(test_labels)
-    precision = precision_score(test_labels, test_preds_argmax, average='micro', zero_division=0)
-    recall = recall_score(test_labels, test_preds_argmax, average='micro', zero_division=0)
-    f1 = f1_score(test_labels, test_preds_argmax, average='micro', zero_division=0)
+    precision = precision_score(test_labels, test_preds_argmax, average='weighted', zero_division=0)
+    recall = recall_score(test_labels, test_preds_argmax, average='weighted', zero_division=0)
+    f1 = f1_score(test_labels, test_preds_argmax, average='weighted', zero_division=0)
 
     #roc per class + overall
     roc_per_class = []
