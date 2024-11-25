@@ -22,7 +22,7 @@ def parse_args():
     parser.add_argument("--nodes", default=2, type=int, help="Number of nodes to request")
     
     parser.add_argument("--job-name", default="ViT", type=str, help="Job name")
-    parser.add_argument("--timeout", default=5600, type=int, help="Duration of the job")
+    parser.add_argument("--timeout", default=5760, type=int, help="Duration of the job")
     parser.add_argument("--job_dir", default="", type=str, help="Job dir. Leave empty for automatic.")
 
     parser.add_argument("--partition", default="microlab", type=str, help="Partition where to submit")

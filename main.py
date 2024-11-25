@@ -16,6 +16,7 @@ import torch.distributed as dist
 import torch.nn as nn
 
 from timm.scheduler import create_scheduler
+from timm.scheduler import CosineLRScheduler
 from timm.optim import create_optimizer
 
 from utils.LARC import LARC
@@ -95,8 +96,12 @@ def get_args_parser():
     parser.add_argument('--lr-noise-pct', type=float, default=0.67, metavar='PERCENT', help='learning rate noise limit percent (default: 0.67)')
     parser.add_argument('--lr-noise-std', type=float, default=1.0, metavar='STDDEV', help='learning rate noise std-dev (default: 1.0)')
     parser.add_argument('--warmup-lr', type=float, default=1e-6, metavar='LR', help='warmup learning rate (default: 1e-6)')
+    parser.add_argument('--t-initial', type=int, default=50, help='Initial T value for cosine scheduler')
     parser.add_argument('--min-lr', type=float, default=1e-5, metavar='LR', help='lower lr bound for cyclic schedulers that hit 0 (1e-5)')
     parser.add_argument('--decay-epochs', type=float, default=10, metavar='N', help='epoch interval to decay LR')
+    parser.add_argument('--cycle-mul', type=float, default=1.3, metavar='N', help='cycle multiplier for cosine restarts')
+    parser.add_argument('--cycle-limit', type=int, default=7, metavar='N', help='cycle limit for cosine restarts')
+    parser.add_argument('--cycle-decay', type=int, default=0.9, metavar='N', help='cycle decay for cosine restarts')
     parser.add_argument('--warmup-epochs', type=int, default=5, metavar='N', help='epochs to warmup LR, if scheduler supports')
     parser.add_argument('--cooldown-epochs', type=int, default=5, metavar='N', help='epochs to cooldown LR at min_lr, after cyclic schedule ends')
     parser.add_argument('--patience-epochs', type=int, default=10, metavar='N', help='patience epochs for Plateau LR scheduler (default: 10')
@@ -108,7 +113,7 @@ def get_args_parser():
     parser.add_argument('--gt-path', default='/home/domenico/Desktop/test_modelli/datasets/Madrid/gt/', type=str, help='dataset path') #/home/domenico/Desktop/dataset_experiments/HSI_GT/npyFiles/
     parser.add_argument('--channels', type=int, default=25, help='Number of channels in the dataset')
     parser.add_argument('--train-pcg', default='0.7', type=float, help='Train set split percentage')
-    parser.add_argument('--val-pcg', default='0.2', type=float, help='Validation set split percentage')
+    parser.add_argument('--val-pcg', default='0.1', type=float, help='Validation set split percentage')
     parser.add_argument('--densify-labels', default=[2,3], nargs='+', type=int, help="Labels to densify")
     parser.add_argument('--augment-labels', default=[2,3], nargs='+', type=int, help="Labels to augment")
     parser.add_argument('--weighted-sampler', action='store_true', default=False, help='Use a weighted sampler')
@@ -186,7 +191,7 @@ def main(args):
     val_data, val_labels, val_lab_count_noDens, _ = tools.loadImagesData(args.data_path, args.gt_path, validation_ids, patch_size=args.patch_size, labelsToDensify=[], labelsToAugment=[], minMaxVects=[min_vect, max_vect])
 
     counts = train_lab_count_noDens + val_lab_count_noDens
-    #unique, counts = np.unique(np.concatenate((train_lab_count_noDens, val_lab_count_noDens)), return_counts=True)
+    #unique, counts = np.unique(fnp.concatenate((train_lab_count_noDens, val_lab_count_noDens)), return_counts=True)
 
     raw_weights = {int(i): sum(counts) / count for i, count in enumerate(counts)}
 
@@ -288,7 +293,10 @@ def main(args):
     if args.use_larc == True:
         optimizer = LARC(_optimizer)
 
-    lr_scheduler, _ = create_scheduler(args, _optimizer)
+    if args.sched == 'cosine_restart':
+        lr_scheduler = CosineLRScheduler(_optimizer, t_initial=args.t_initial, cycle_limit=args.cycle_limit, cycle_mul=args.cycle_mul, k_decay=args.decay_rate, lr_min=args.min_lr, warmup_t=args.warmup_epochs, warmup_lr_init=args.warmup_lr)
+    else:
+        lr_scheduler, _ = create_scheduler(args, _optimizer)
 
     if args.criterion == 'cross_entropy':
         criterion = torch.nn.CrossEntropyLoss()
@@ -354,7 +362,7 @@ def main(args):
         #to next epoch
         if args.sched == 'plateau':
             lr_scheduler.step(val_stats["avg_loss"])
-        elif args.sched == 'cosine':
+        elif args.sched == 'cosine' or args.sched == 'cosine_restart':
             lr_scheduler.step(epoch)
         else:
             print('Scheduler not found')
