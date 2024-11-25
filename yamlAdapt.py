@@ -1,14 +1,11 @@
 import os
 import re
 
-# Percorso principale da cui partire per cercare i file
 root_dir = "/home/domenico/mlruns"
 
-# Pattern da cercare e nuova stringa
 pattern = r"(artifact_(?:uri|location):\s*)file:///home/ragusa/ModelExperiments"
 replacement = r"\1file:///home/domenico/"
 
-# Estensione dei file da modificare
 file_extension = ".yaml"
 
 def update_artifact_location(directory, pattern, replacement, extension):
@@ -30,5 +27,4 @@ def update_artifact_location(directory, pattern, replacement, extension):
                 else:
                     print(f"No changes in: {file_path}")
 
-# Esegui lo script
 update_artifact_location(root_dir, pattern, replacement, file_extension)
