@@ -111,6 +111,7 @@ def get_args_parser():
     parser.add_argument('--val-pcg', default='0.2', type=float, help='Validation set split percentage')
     parser.add_argument('--densify-labels', default=[2,3], nargs='+', type=int, help="Labels to densify")
     parser.add_argument('--augment-labels', default=[2,3], nargs='+', type=int, help="Labels to augment")
+    parser.add_argument('--weighted-sampler', action='store_true', default=False, help='Use a weighted sampler')
 
     # Distributed training parameters
     parser.add_argument('--distributed', action='store_true', default=False, help='Enabling distributed training')
@@ -160,28 +161,37 @@ def main(args):
     with open(f'image_list_{args.db_name}.json', 'r') as f:
         image_list = json.load(f)
 
-    random.Random(seed).shuffle(image_list)
+    train_val_ids = []
+    tumor_IDs, nontumor_IDs = tools.get_tumor_IDs(image_list, args.gt_path)
+    
+    random.Random(seed).shuffle(tumor_IDs)
+    random.Random(seed).shuffle(nontumor_IDs)
 
-    train_split = int(round(len(image_list)*(args.train_pcg)))
-    validation_split = int(round(len(image_list)*(args.val_pcg)))
+    T_train_ids, T_val_ids, T_test_ids = tools.random_split(tumor_IDs, args.train_pcg,
+                                                            args.val_pcg, seed)
+    
+    train_ids, validation_ids, test_ids = tools.random_split(nontumor_IDs, args.train_pcg,
+                                                             args.val_pcg, seed)
 
-    test_ids = image_list[train_split+validation_split::]
-    train_val_ids = image_list[:train_split+validation_split]
-    random.Random(args.seed).shuffle(train_val_ids)
+    train_ids.extend(T_train_ids)
+    validation_ids.extend(T_val_ids)
+    test_ids.extend(T_test_ids)
 
-    train_ids = train_val_ids[:train_split]
-    validation_ids = train_val_ids[train_split::]
+    train_val_ids.extend(train_ids)
+    train_val_ids.extend(validation_ids)
 
     min_vect, max_vect = tools.min_max_norm_val(args.data_path, args.gt_path, train_val_ids, args.channels)
 
-    train_data, train_labels = tools.loadImagesData(args.data_path, args.gt_path, train_ids, patch_size=args.patch_size, labelsToDensify=args.densify_labels, labelsToAugment=args.augment_labels, minMaxVects=[min_vect, max_vect])
-    val_data, val_labels = tools.loadImagesData(args.data_path, args.gt_path, validation_ids, patch_size=args.patch_size, labelsToDensify=[], labelsToAugment=[], minMaxVects=[min_vect, max_vect])
+    train_data, train_labels, train_lab_count_noDens, _  = tools.loadImagesData(args.data_path, args.gt_path, train_ids, patch_size=args.patch_size, labelsToDensify=args.densify_labels, labelsToAugment=args.augment_labels, minMaxVects=[min_vect, max_vect])
+    val_data, val_labels, val_lab_count_noDens, _ = tools.loadImagesData(args.data_path, args.gt_path, validation_ids, patch_size=args.patch_size, labelsToDensify=[], labelsToAugment=[], minMaxVects=[min_vect, max_vect])
 
+    counts = train_lab_count_noDens + val_lab_count_noDens
+    #unique, counts = np.unique(np.concatenate((train_lab_count_noDens, val_lab_count_noDens)), return_counts=True)
 
-    unique, counts = np.unique(np.concatenate((train_labels, val_labels)), return_counts=True)
+    raw_weights = {int(i): sum(counts) / count for i, count in enumerate(counts)}
 
-    total_count = len(train_labels) + len(val_labels)
-    class_weights = {int(cls): total_count / count for cls, count in zip(unique, counts)}
+    #weights normalization
+    class_weights = {cls: weight / sum(raw_weights.values()) for cls, weight in raw_weights.items()}
 
     weights = [class_weights[i] for i in range(len(class_weights))]
     class_weights_tensor = torch.tensor(weights, dtype=torch.float32, device=device)
@@ -207,8 +217,11 @@ def main(args):
         else:
             sampler_val = torch.utils.data.SequentialSampler(dataset_val)
     else:
-        sampler_train = torch.utils.data.RandomSampler(dataset_train)
-        sampler_val = torch.utils.data.SequentialSampler(dataset_val)
+        if args.weighted_sampler:
+            sampler_train = torch.utils.data.WeightedRandomSampler(class_weights_tensor, len(dataset_train), replacement=True)
+        else:
+            sampler_train = torch.utils.data.RandomSampler(dataset_train)
+            sampler_val = torch.utils.data.SequentialSampler(dataset_val)
 
     data_loader_train = torch.utils.data.DataLoader(
         dataset_train, sampler=sampler_train,

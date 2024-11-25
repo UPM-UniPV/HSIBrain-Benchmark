@@ -7,10 +7,13 @@ import os
 
 import torch
 import torch.distributed as dist
+import random
 
 import cv2
 
 import numpy as np
+
+import datetime
 
 def augment_patches(samps, labs):
 	if len(labs.shape)>2:
@@ -131,17 +134,25 @@ def get_cube_and_GT(idp, data_path, gt_path, patch_size, minMaxVects):
 def loadImagesData(hsi_path, gt_path, imglist, patch_size, labelsToDensify, labelsToAugment, minMaxVects):
     data_samps = []
     gt_labs = []
-         
+    
+    all_counts_notDens = np.zeros(4, dtype=int)
+    all_counts_dens = np.zeros(4, dtype=int)
     for imgID in imglist:
         hsi_dataset= np.load(hsi_path+imgID+'.npy')
-        labels = np.load(gt_path+imgID+'.npy')
+        labels = np.load(gt_path+imgID+'.npy').astype(np.int8)
+
+        unique_lab, lab_count_notDens = np.unique(labels[labels != 0]-1, return_counts=True)
+        all_counts_notDens[unique_lab] += lab_count_notDens
 
         if len(labelsToDensify) != 0:
             labels = densify_gt(labels, labelsToDensify)
 
+        unique_lab, lab_count_dens = np.unique(labels[labels != 0]-1, return_counts=True)
+        all_counts_dens[unique_lab] += lab_count_dens
+
         hsi_dataset = hsi_dataset-minMaxVects[0]/(minMaxVects[1]-minMaxVects[0]) #min-max normalization
 
-        for l in np.unique(labels)[1:]: #labels 0 -> background
+        for l in np.unique(labels)[1:]: #labels 0 -> background, assumption: each image has background
             if patch_size>1:
                 label_mask = (labels==l).astype('uint8')
                 c_yx = np.stack(np.where(label_mask>0), axis=1)
@@ -177,7 +188,7 @@ def loadImagesData(hsi_path, gt_path, imglist, patch_size, labelsToDensify, labe
     gt_labs = np.vstack(gt_labs).astype(int)
     gt_labs = np.squeeze(gt_labs)
 
-    return data_samps, gt_labs-1 #0: healthy, 1: tumor, 2: blood, 3: duraMater
+    return data_samps, gt_labs-1, all_counts_notDens, all_counts_dens #0: healthy, 1: tumor, 2: blood, 3: duraMater
 
 def dilate(img, k=3):
 	st_elem = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(k,k))
@@ -259,9 +270,39 @@ def init_distributed_mode(args):
 
     torch.cuda.set_device(args.gpu)
     args.dist_backend = 'nccl'
+    min_timeout = 30
     print('| distributed init (rank {}): {}'.format(
         args.rank, args.dist_url), flush=True)
     torch.distributed.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
-                                         world_size=args.world_size, rank=args.rank)
+                                         world_size=args.world_size, rank=args.rank, timeout=datetime.timedelta(minutes=min_timeout))
     torch.distributed.barrier()
     setup_for_distributed(args.rank == 0)
+
+def get_tumor_IDs(IDs, gt_path, tumor_label=2):
+
+    tumor_IDs, non_tumor_IDs = [], []
+
+    for idp in IDs:
+        gt_img = np.load(f"{gt_path}{idp}.npy")
+        
+        if np.isin(tumor_label, np.unique(gt_img).astype(int)):
+            tumor_IDs.append(idp)
+        else:
+            non_tumor_IDs.append(idp)
+    
+    return tumor_IDs, non_tumor_IDs
+
+
+def random_split(image_list, train_pctg, val_pctg, seed):
+
+    train_split = int(round(len(image_list)*(train_pctg)))
+    validation_split = int(round(len(image_list)*(val_pctg)))
+
+    train_val_ids = image_list[:train_split+validation_split]
+    random.Random(seed).shuffle(train_val_ids)
+
+    train_ids = train_val_ids[:train_split]
+    validation_ids = train_val_ids[train_split::]
+    test_ids = image_list[train_split+validation_split::]
+
+    return train_ids, validation_ids, test_ids
