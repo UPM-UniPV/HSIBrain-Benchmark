@@ -136,7 +136,7 @@ def get_args_parser():
 
 def main(args):
     tools.init_distributed_mode(args)
-    temp_dir = Path(f"./tmp") #cannot be mktmpdir because of distributed training, otherwise other threads not know where the trained model is when finished
+    temp_dir = Path(f"./tmp")
 
     experiment_name = args.model_type
     experiment_description = f'{args.model_type} for brain tumor classification'
@@ -148,6 +148,8 @@ def main(args):
         print(args)
         mlflow.set_experiment(experiment_name=experiment_name)
         mlflow.set_experiment_tag('mlflow.note.content', experiment_description)
+
+        temp_dir.mkdir(exist_ok=True)
 
     device = torch.device(args.device)
 
@@ -162,6 +164,8 @@ def main(args):
     random.seed(seed)
 
     cudnn.benchmark = True
+    torch.cuda.empty_cache()
+
 
     with open(f'image_list_{args.db_name}.json', 'r') as f:
         image_list = json.load(f)
@@ -304,6 +308,9 @@ def main(args):
         criterion = torch.nn.CrossEntropyLoss(weight=class_weights_tensor)   
     elif args.criterion == 'focal':
         criterion = FocalLoss(alpha=None, reduction='mean', gamma=args.gamma, weight=class_weights_tensor)
+    else:
+        print('Criterion not found')
+        exit()
         
     # log
     if tools.is_main_process():
@@ -366,7 +373,7 @@ def main(args):
             lr_scheduler.step(epoch)
         else:
             print('Scheduler not found')
-            lr_scheduler.step()
+            exit()
 
     # log and register model
     if tools.is_main_process():
@@ -453,7 +460,7 @@ def main(args):
         )
         
         test_preds, test_stats = test_evaluate(data_loader_test, model, device, args)
-        test_preds_softmax = test_preds.cpu().numpy()
+        test_preds_softmax = test_preds.numpy()
         test_preds_argmax = np.argmax(test_preds_softmax, axis=1)
 
         if args.distributed:

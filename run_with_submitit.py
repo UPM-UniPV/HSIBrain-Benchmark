@@ -22,7 +22,7 @@ def parse_args():
     parser.add_argument("--nodes", default=2, type=int, help="Number of nodes to request")
     
     parser.add_argument("--job-name", default="ViT", type=str, help="Job name")
-    parser.add_argument("--timeout", default=5760, type=int, help="Duration of the job")
+    #parser.add_argument("--timeout", default=5760, type=int, help="Duration of the job")
     parser.add_argument("--job_dir", default="", type=str, help="Job dir. Leave empty for automatic.")
 
     parser.add_argument("--partition", default="microlab", type=str, help="Partition where to submit")
@@ -75,7 +75,7 @@ def main():
 
     num_gpus_per_node = args.ngpus
     nodes = args.nodes
-    timeout_min = args.timeout
+    #timeout_min = args.timeout
 
     partition = args.partition
     kwargs = {}
@@ -88,7 +88,7 @@ def main():
         tasks_per_node=num_gpus_per_node,  # one task per GPU num_gpus_per_node
         cpus_per_task=1,
         nodes=nodes,
-        timeout_min=timeout_min,  # max is 60 * 72
+        #timeout_min=timeout_min,  # max is 60 * 72
         # Below are cluster dependent parameters
         slurm_partition=partition,
         slurm_signal_delay_s=120,
