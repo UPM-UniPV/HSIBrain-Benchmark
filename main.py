@@ -29,7 +29,7 @@ from models.HSIMamba import HSIClassificationMambaModel
 from models.HiT import HiT, ConvPermuteMLP
 from models.mamtrans.MamTrans import MamTrans
 from models.ssmamba.ssmamba import mamba_SS_model
-from models.CNN_2D import CNxtN_2D
+from models.Conv.CNN_2D import CNxtN_2D
 from models.DBDA import DBDA
 from models.SpectralFormer import SpectralFormer
 from models.SSAN import SSAN
