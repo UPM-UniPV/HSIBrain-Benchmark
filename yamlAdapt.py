@@ -1,10 +1,13 @@
 import os
 import re
 
-root_dir = "/home/domenico/mlruns"
+# local dir
+root_dir = "/home/guillermo.vazquez/HSIBrain/mlruns"
 
-pattern = r"(artifact_(?:uri|location):\s*)file:///home/ragusa/ModelExperiments"
-replacement = r"\1file:///home/domenico/"
+# old dir
+pattern = r"(artifact_(?:uri|location):\s*)file:///home/guille/Documents/HSIBrain_results"
+# local machine dir
+replacement = r"\1file:///home/guillermo.vazquez/HSIBrain"
 
 file_extension = ".yaml"
 

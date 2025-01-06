@@ -168,3 +168,7 @@ mlruns/
 runs/
 sbatch.sh
 test.ipynb
+
+training_commands.txt
+exp_track.txt
+nohup.out

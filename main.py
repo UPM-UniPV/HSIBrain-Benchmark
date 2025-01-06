@@ -15,8 +15,7 @@ from torch.utils.data import TensorDataset
 import torch.distributed as dist
 import torch.nn as nn
 
-from timm.scheduler import create_scheduler
-from timm.scheduler import CosineLRScheduler
+from timm.scheduler import create_scheduler, CosineLRScheduler
 from timm.optim import create_optimizer
 
 from utils.LARC import LARC
@@ -30,6 +29,14 @@ from models.HSIMamba import HSIClassificationMambaModel
 from models.HiT import HiT, ConvPermuteMLP
 from models.mamtrans.MamTrans import MamTrans
 from models.ssmamba.ssmamba import mamba_SS_model
+from models.CNN_2D import CNxtN_2D
+from models.DBDA import DBDA
+from models.SpectralFormer import SpectralFormer
+from models.SSAN import SSAN
+from models.GhostNet import GhostNet
+from models.Hybrid3D_2D import Hyb3D_2D
+from models.RSSAN import RSSAN
+from models.LiteDepthwiseNet import LiteDwNet
 
 import models.extraLayers
 
@@ -37,6 +44,9 @@ from engine import train_epoch, evaluate, test_evaluate
 import utils.tools as tools
 
 import seaborn as sns
+
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 import mlflow
@@ -50,11 +60,11 @@ def get_args_parser():
     parser = argparse.ArgumentParser('Training and evaluation script', add_help=False)
 
     # Basic parameters
-    parser.add_argument('--model-type', default='SSMamba', type=str, help='Model type (default: "ViT")')
+    parser.add_argument('--model-type', default='ViT', type=str, help='Model type (default: "ViT")')
     parser.add_argument('--batch-size', default=512, type=int, help='Batch size') #8192 to be used with LARS
     parser.add_argument('--epochs', default=1, type=int, help='Total epochs to run')
     parser.add_argument('--device', default='cuda', help='device to use for training / testing')
-    parser.add_argument('--seed', default=12, type=int)
+    parser.add_argument('--seed', default=0, type=int)
 
     # ViT parameters
     parser.add_argument('--mlp-dim', default=4, type=int, help='Number of features in the mlp')
@@ -170,6 +180,8 @@ def main(args):
     with open(f'image_list_{args.db_name}.json', 'r') as f:
         image_list = json.load(f)
 
+        
+    """ RANDOM SPLITTING """
     train_val_ids = []
     tumor_IDs, nontumor_IDs = tools.get_tumor_IDs(image_list, args.gt_path)
     
@@ -188,7 +200,8 @@ def main(args):
 
     train_val_ids.extend(train_ids)
     train_val_ids.extend(validation_ids)
-
+    """ ********* """
+      
     min_vect, max_vect = tools.min_max_norm_val(args.data_path, args.gt_path, train_val_ids, args.channels)
 
     train_data, train_labels, train_lab_count_noDens, _  = tools.loadImagesData(args.data_path, args.gt_path, train_ids, patch_size=args.patch_size, labelsToDensify=args.densify_labels, labelsToAugment=args.augment_labels, minMaxVects=[min_vect, max_vect])
@@ -250,6 +263,20 @@ def main(args):
 
     if(args.model_type == 'ViT'):
         model = ViT(patchSize=args.patch_size, nBlocks=args.blocks, mlp_dim=args.mlp_dim, caf=args.caf, easyAtt=args.easyAtt, numHeads=args.heads, embedDim=args.embed_dim, numClasses=args.classes, dropout=args.drop, dropPath=args.dropPath_rate, channels=args.channels)
+    elif args.model_type == 'DBDA':
+      model = DBDA(band=args.channels, classes=args.classes)
+    elif args.model_type == 'SpectralFormer':
+      model = SpectralFormer(patch_size=args.patch_size, num_patches=args.channels, num_classes=args.classes)
+    elif args.model_type == 'SSAN':
+      model = SSAN(patch_size=args.patch_size, num_band=args.channels, n_classes=args.classes)
+    elif args.model_type == 'GhostNet':
+      model = GhostNet(input_channels=args.channels, n_classes=args.classes)
+    elif args.model_type == 'Hyb3D_2D':
+      model = Hyb3D_2D(in_chns=args.channels, patch_size=args.patch_size, out_classes=args.classes)
+    elif args.model_type == 'RSSAN':
+      model = RSSAN(in_chns=args.channels, patch_size=args.patch_size, out_classes=args.classes)
+    elif args.model_type == 'LiteDwNet':
+      model = LiteDwNet(in_chns=args.channels, patch_size=args.patch_size, out_classes=args.classes)
     elif args.model_type == 'ViM':
         model = VisionMamba(patch_size=args.patch_size, num_classes=args.classes, embed_dim=args.embed_dim, depth=args.blocks, drop_rate=args.drop, channels=args.channels, rms_norm=True, residual_in_fp32=True, fused_add_norm=True, final_pool_type='mean', if_abs_pos_embed=True, if_rope=False, if_rope_residual=False, bimamba_type="v2", if_cls_token=True, if_divide_out=True, use_middle_cls_token=False)
         model.patch_embed = models.extraLayers.PatchEmbedding(args.patch_size, args.embed_dim) #changes the patchembedding layer to adapt to the input format
@@ -395,6 +422,20 @@ def main(args):
 
     if(args.model_type == 'ViT'):
         model = ViT(patchSize=args.patch_size, nBlocks=args.blocks, mlp_dim=args.mlp_dim, caf=args.caf, easyAtt=args.easyAtt, numHeads=args.heads, embedDim=args.embed_dim, numClasses=args.classes, dropout=args.drop, dropPath=args.dropPath_rate, channels=args.channels)
+    elif args.model_type == 'DBDA':
+      model = DBDA(band=args.channels, classes=args.classes)
+    elif args.model_type == 'SpectralFormer':
+      model = SpectralFormer(patch_size=args.patch_size, num_patches=args.channels, num_classes=args.classes)
+    elif args.model_type == 'SSAN':
+      model = SSAN(patch_size=args.patch_size, num_band=args.channels, n_classes=args.classes)
+    elif args.model_type == 'GhostNet':
+      model = GhostNet(input_channels=args.channels, n_classes=args.classes)
+    elif args.model_type == 'Hyb3D_2D':
+      model = Hyb3D_2D(in_chns=args.channels, patch_size=args.patch_size, out_classes=args.classes)
+    elif args.model_type == 'RSSAN':
+      model = RSSAN(in_chns=args.channels, patch_size=args.patch_size, out_classes=args.classes)
+    elif args.model_type == 'LiteDwNet':
+      model = LiteDwNet(in_chns=args.channels, patch_size=args.patch_size, out_classes=args.classes)
     elif args.model_type == 'ViM':
         model = VisionMamba(patch_size=args.patch_size, num_classes=args.classes, embed_dim=args.embed_dim, depth=args.blocks, drop_rate=args.drop, channels=args.channels, rms_norm=True, residual_in_fp32=True, fused_add_norm=True, final_pool_type='mean', if_abs_pos_embed=True, if_rope=False, if_rope_residual=False, bimamba_type="v2", if_cls_token=True, if_divide_out=True, use_middle_cls_token=True)
         model.patch_embed = models.extraLayers.PatchEmbedding(args.patch_size, args.embed_dim)
@@ -501,6 +542,7 @@ def main(args):
 
 
     if tools.is_main_process():
+        print(f"----------> Model {args.model_type} finished run")
         mlflow.end_run()
 
     if args.distributed:
@@ -508,7 +550,7 @@ def main(args):
         dist.destroy_process_group()        
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser('Training and evaluation script', parents=[get_args_parser()])
-    args = parser.parse_args()
+	parser = argparse.ArgumentParser('Training and evaluation script', parents=[get_args_parser()])
+	args = parser.parse_args()
 
-    main(args)
+	main(args)

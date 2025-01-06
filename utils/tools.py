@@ -4,6 +4,7 @@ Misc functions, including distributed helpers.
 Mostly copy-paste from torchvision references.
 """
 import os
+import random
 
 import torch
 import torch.distributed as dist
@@ -233,25 +234,20 @@ def setup_for_distributed(is_master):
 
     __builtin__.print = print
 
-
 def get_world_size():
     return dist.get_world_size()
-
 
 def get_rank():
     if torch.distributed.is_initialized():
         return dist.get_rank()
     return 0
 
-
 def is_main_process():
     return get_rank() == 0
-
 
 def save_on_master(*args, **kwargs):
     if is_main_process():
         torch.save(*args, **kwargs)
-
 
 def init_distributed_mode(args):
     if 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:
@@ -292,7 +288,6 @@ def get_tumor_IDs(IDs, gt_path, tumor_label=2):
     
     return tumor_IDs, non_tumor_IDs
 
-
 def random_split(image_list, train_pctg, val_pctg, seed):
 
     train_split = int(round(len(image_list)*(train_pctg)))
@@ -306,3 +301,9 @@ def random_split(image_list, train_pctg, val_pctg, seed):
     test_ids = image_list[train_split+validation_split::]
 
     return train_ids, validation_ids, test_ids
+
+def check_dirs(*args):
+	for dir_ in args:
+		if not os.path.exists(dir_):
+			os.makedirs(dir_)
+
