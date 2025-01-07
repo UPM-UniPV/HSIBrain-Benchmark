@@ -144,6 +144,61 @@ def get_args_parser():
 
     return parser
 
+def select_model(args):
+    #By default the hyperparameters are the ones used for the original papers
+    if(args.model_type == 'ViT'):
+        model = ViT(patchSize=args.patch_size, nBlocks=args.blocks, mlp_dim=args.mlp_dim, caf=args.caf, easyAtt=args.easyAtt, numHeads=args.heads, embedDim=args.embed_dim, numClasses=args.classes, dropout=args.drop, dropPath=args.dropPath_rate, channels=args.channels)
+    elif args.model_type == 'DBDA':
+        model = DBDA(band=args.channels, classes=args.classes)
+    elif args.model_type == 'SpectralFormer':
+        model = SpectralFormer(patch_size=args.patch_size, num_patches=args.channels, num_classes=args.classes)
+    elif args.model_type == 'SSAN':
+        model = SSAN(patch_size=args.patch_size, num_band=args.channels, n_classes=args.classes)
+    elif args.model_type == 'GhostNet':
+        model = GhostNet(input_channels=args.channels, n_classes=args.classes)
+    elif args.model_type == 'Hyb3D_2D':
+        model = Hyb3D_2D(in_chns=args.channels, patch_size=args.patch_size, out_classes=args.classes)
+    elif args.model_type == 'RSSAN':
+        model = RSSAN(in_chns=args.channels, patch_size=args.patch_size, out_classes=args.classes)
+    elif args.model_type == 'LiteDwNet':
+        model = LiteDwNet(in_chns=args.channels, patch_size=args.patch_size, out_classes=args.classes)
+    elif args.model_type == 'ViM':
+        model = VisionMamba(image_size=args.patch_size, patch_size=args.patch_size, num_classes=args.classes, channels=args.channels) #embed_dim=args.embed_dim, depth=args.blocks, drop_rate=args.drop, , rms_norm=True, residual_in_fp32=True, fused_add_norm=True, final_pool_type='mean', if_abs_pos_embed=True, if_rope=False, if_rope_residual=False, bimamba_type="v2", if_cls_token=True, if_divide_out=True, use_middle_cls_token=False
+        #model.patch_embed = models.extraLayers.PatchEmbedding(args.patch_size, embed_dim=192) #changes the patchembedding layer to adapt to the input format, embed_dim = args.embed_dim
+    elif args.model_type == 'HSIMamba':
+        model = nn.Sequential(
+            models.extraLayers.PermuteLayer(0,2,3,1), #adapt the patch to the required input format (B, H, W, C)
+            HSIClassificationMambaModel(spatial_dim=args.patch_size, num_bands=args.channels, num_classes=args.classes, hidden_dim=256, output_dim=128, delta_param_init=0.01)
+        )
+    elif args.model_type == 'MamTrans':
+        model = MamTrans(channels=args.channels, num_classes=args.classes, image_size=args.patch_size, datasetname=None) #head_dim, hidden_dim , emb_dim=args.embed_dim, num_heads=args.heads, num_layers=args.blocks,
+    elif args.model_type == 'SSMamba':
+        model = mamba_SS_model(spa_img_size=(args.patch_size, args.patch_size), spe_img_size=(3,3), spa_patch_size=3, spe_patch_size=2, in_chans=args.channels, nclass=args.classes,
+                               hid_chans=64, embed_dim=64, global_pool=True)
+    elif args.model_type == 'HiT':
+        if args.db_name == 'madrid':
+            if args.large_features:
+                embed_dims = [128, 128, 256, 256]
+            else:
+                embed_dims = [56, 56, 88, 88]
+        elif args.db_name == 'LP':
+            if args.large_features:
+                embed_dims = [536, 536, 640, 640]
+            else:
+                embed_dims = [256, 256, 512, 512]
+        model = nn.Sequential(
+            models.extraLayers.AddDimensionLayer(1),
+            HiT(layers=[4,3,14,3], img_size=args.patch_size, in_chans=args.channels, num_classes=args.classes,
+                 embed_dims=embed_dims, transitions=[False, True, False, False], segment_dim=[8,8,4,4], mlp_ratios=[3,3,3,3], skip_lam=1.0,
+                 qkv_bias=False, qk_scale=None, drop_rate=0.1, attn_drop_rate=0.1, drop_path_rate=0.1,
+                 norm_layer=nn.LayerNorm, mlp_fn=ConvPermuteMLP, large_features=args.large_features) #Doesn't work for single pixels, only for patches to capturre spatial information
+        )
+    else:
+        print('Model not found')
+        exit()
+
+    return model
+
 def main(args):
     tools.init_distributed_mode(args)
     temp_dir = Path(f"./tmp")
@@ -261,57 +316,8 @@ def main(args):
         drop_last=False
     )
 
-    if(args.model_type == 'ViT'):
-        model = ViT(patchSize=args.patch_size, nBlocks=args.blocks, mlp_dim=args.mlp_dim, caf=args.caf, easyAtt=args.easyAtt, numHeads=args.heads, embedDim=args.embed_dim, numClasses=args.classes, dropout=args.drop, dropPath=args.dropPath_rate, channels=args.channels)
-    elif args.model_type == 'DBDA':
-      model = DBDA(band=args.channels, classes=args.classes)
-    elif args.model_type == 'SpectralFormer':
-      model = SpectralFormer(patch_size=args.patch_size, num_patches=args.channels, num_classes=args.classes)
-    elif args.model_type == 'SSAN':
-      model = SSAN(patch_size=args.patch_size, num_band=args.channels, n_classes=args.classes)
-    elif args.model_type == 'GhostNet':
-      model = GhostNet(input_channels=args.channels, n_classes=args.classes)
-    elif args.model_type == 'Hyb3D_2D':
-      model = Hyb3D_2D(in_chns=args.channels, patch_size=args.patch_size, out_classes=args.classes)
-    elif args.model_type == 'RSSAN':
-      model = RSSAN(in_chns=args.channels, patch_size=args.patch_size, out_classes=args.classes)
-    elif args.model_type == 'LiteDwNet':
-      model = LiteDwNet(in_chns=args.channels, patch_size=args.patch_size, out_classes=args.classes)
-    elif args.model_type == 'ViM':
-        model = VisionMamba(patch_size=args.patch_size, num_classes=args.classes, embed_dim=args.embed_dim, depth=args.blocks, drop_rate=args.drop, channels=args.channels, rms_norm=True, residual_in_fp32=True, fused_add_norm=True, final_pool_type='mean', if_abs_pos_embed=True, if_rope=False, if_rope_residual=False, bimamba_type="v2", if_cls_token=True, if_divide_out=True, use_middle_cls_token=False)
-        model.patch_embed = models.extraLayers.PatchEmbedding(args.patch_size, args.embed_dim) #changes the patchembedding layer to adapt to the input format
-    elif args.model_type == 'HSIMamba':
-        model = nn.Sequential(
-            models.extraLayers.PermuteLayer(0,2,3,1), #adapt the patch to the required input format (B, H, W, C)
-            HSIClassificationMambaModel(spatial_dim=args.patch_size, num_bands=args.channels, hidden_dim=args.embed_dim, output_dim=args.output_dim, delta_param_init=args.deltat, num_classes=args.classes)
-        )
-    elif args.model_type == 'MamTrans':
-        model = MamTrans(channels=args.channels, num_classes=args.classes, image_size=args.patch_size, emb_dim=args.embed_dim, num_heads=args.heads, num_layers=args.blocks, datasetname=args.db_name) #head_dim, hidden_dim
-    elif args.model_type == 'SSMamba':
-        model = mamba_SS_model(spa_img_size=(args.patch_size, args.patch_size), spe_img_size=(3,3), spa_patch_size=3, spe_patch_size=2, in_chans=args.channels, hid_chans = args.embed_dim, embed_dim=args.embed_dim, nclass=args.classes, drop_path=args.dropPath_rate, depth=args.blocks, bi=True, 
-                                norm_layer=nn.LayerNorm, global_pool=False, cls = True, fu=True)
-    elif args.model_type == 'HiT':
-        if args.db_name == 'madrid':
-            if args.large_features:
-                embed_dims = [128, 128, 256, 256]
-            else:
-                embed_dims = [56, 56, 88, 88]
-        elif args.db_name == 'LP':
-            if args.large_features:
-                embed_dims = [536, 536, 640, 640]
-            else:
-                embed_dims = [256, 256, 512, 512]
-        model = nn.Sequential(
-            models.extraLayers.AddDimensionLayer(1),
-            HiT([4,3,14,3], img_size=args.patch_size, patch_size=3, in_chans=args.channels, num_classes=4,
-                 embed_dims=embed_dims, transitions=[False, True, False, False], segment_dim=[8,8,4,4], mlp_ratios=[3,3,3,3], skip_lam=1.0,
-                 qkv_bias=False, qk_scale=None, drop_rate=0.1, attn_drop_rate=0.1, drop_path_rate=0.1,
-                 norm_layer=nn.LayerNorm, mlp_fn=ConvPermuteMLP, large_features=args.large_features) #Doesn't work for single pixels, only for patches to capturre spatial information
-        )
-    else:
-        print('Model not found')
-        exit()
-
+    
+    model = select_model(args)
     model.to(device)
 
     model_without_ddp = model
@@ -420,57 +426,8 @@ def main(args):
     if args.distributed:
         dist.barrier()
 
-    if(args.model_type == 'ViT'):
-        model = ViT(patchSize=args.patch_size, nBlocks=args.blocks, mlp_dim=args.mlp_dim, caf=args.caf, easyAtt=args.easyAtt, numHeads=args.heads, embedDim=args.embed_dim, numClasses=args.classes, dropout=args.drop, dropPath=args.dropPath_rate, channels=args.channels)
-    elif args.model_type == 'DBDA':
-      model = DBDA(band=args.channels, classes=args.classes)
-    elif args.model_type == 'SpectralFormer':
-      model = SpectralFormer(patch_size=args.patch_size, num_patches=args.channels, num_classes=args.classes)
-    elif args.model_type == 'SSAN':
-      model = SSAN(patch_size=args.patch_size, num_band=args.channels, n_classes=args.classes)
-    elif args.model_type == 'GhostNet':
-      model = GhostNet(input_channels=args.channels, n_classes=args.classes)
-    elif args.model_type == 'Hyb3D_2D':
-      model = Hyb3D_2D(in_chns=args.channels, patch_size=args.patch_size, out_classes=args.classes)
-    elif args.model_type == 'RSSAN':
-      model = RSSAN(in_chns=args.channels, patch_size=args.patch_size, out_classes=args.classes)
-    elif args.model_type == 'LiteDwNet':
-      model = LiteDwNet(in_chns=args.channels, patch_size=args.patch_size, out_classes=args.classes)
-    elif args.model_type == 'ViM':
-        model = VisionMamba(patch_size=args.patch_size, num_classes=args.classes, embed_dim=args.embed_dim, depth=args.blocks, drop_rate=args.drop, channels=args.channels, rms_norm=True, residual_in_fp32=True, fused_add_norm=True, final_pool_type='mean', if_abs_pos_embed=True, if_rope=False, if_rope_residual=False, bimamba_type="v2", if_cls_token=True, if_divide_out=True, use_middle_cls_token=True)
-        model.patch_embed = models.extraLayers.PatchEmbedding(args.patch_size, args.embed_dim)
-    elif args.model_type == 'HSIMamba':
-        model = nn.Sequential(
-            models.extraLayers.PermuteLayer(0,2,3,1),
-            HSIClassificationMambaModel(spatial_dim=args.patch_size, num_bands=args.channels, hidden_dim=args.embed_dim, output_dim=args.output_dim, delta_param_init=args.deltat, num_classes=args.classes)
-        )
-    elif args.model_type == 'MamTrans':
-        model = MamTrans(channels=args.channels, num_classes=args.classes, image_size=args.patch_size, emb_dim = args.embed_dim, num_heads=args.heads, num_layers=args.blocks, datasetname=args.db_name) #head_dim, hidden_dim
-    elif args.model_type == 'SSMamba':
-        model = mamba_SS_model(spa_img_size=(args.patch_size, args.patch_size), spe_img_size=(3,3), spa_patch_size=3, spe_patch_size=2, in_chans=args.channels, hid_chans = args.embed_dim, embed_dim=args.embed_dim, nclass=args.classes, drop_path=args.dropPath_rate, depth=args.blocks, bi=True, 
-                                norm_layer=nn.LayerNorm, global_pool=False, cls = True, fu=True)
-    elif args.model_type == 'HiT':
-        if args.db_name == 'madrid':
-            if args.large_features:
-                embed_dims = [128, 128, 256, 256]
-            else:
-                embed_dims = [56, 56, 88, 88]
-        elif args.db_name == 'LP':
-            if args.large_features:
-                embed_dims = [536, 536, 640, 640]
-            else:
-                embed_dims = [256, 256, 512, 512]
-        model = nn.Sequential(
-            models.extraLayers.AddDimensionLayer(1),
-            HiT([4,3,14,3], img_size=args.patch_size, patch_size=3, in_chans=args.channels, num_classes=4,
-                embed_dims=embed_dims, transitions=[False, True, False, False], segment_dim=[8,8,4,4], mlp_ratios=[3,3,3,3], skip_lam=1.0,
-                qkv_bias=False, qk_scale=None, drop_rate=0.1, attn_drop_rate=0.1, drop_path_rate=0.1,
-                norm_layer=nn.LayerNorm, mlp_fn=ConvPermuteMLP, large_features=args.large_features)
-        )
-    else:
-        print('Model not found')
-        exit()
-
+    
+    model = select_model(args)
     model.load_state_dict(torch.load(os.path.join(temp_dir,f'{args.model_type}_best_model_{run_name}.pth'), weights_only=True))
     model.to(device)
 

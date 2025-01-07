@@ -59,7 +59,7 @@ class Classifier(nn.Module):
 class MamTrans(nn.Module):
     
     def __init__(self, channels, num_classes, image_size, datasetname, patch_size: int = 1, emb_dim: int = 256, 
-                 num_layers: int = 1, num_heads: int = 4, head_dim = 128, hidden_dim: int = 128, pool: str = "mean"):
+                 num_layers: int = 2, num_heads: int = 4, head_dim = 128, hidden_dim: int = 128, pool: str = "mean"):
         super().__init__()
 
         # Params

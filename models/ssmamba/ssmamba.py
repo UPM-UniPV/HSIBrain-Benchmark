@@ -291,8 +291,8 @@ class mamba_2D_model(nn.Module):
         return x
 
 class mamba_SS_model(nn.Module):
-    def __init__(self, spa_img_size=(224, 224),spe_img_size=(5,5), spa_patch_size=16, spe_patch_size=2, in_chans=3, hid_chans = 32, embed_dim=128, nclass=10, drop_path=0.0, depth=4, bi=True, 
-                 norm_layer=nn.LayerNorm, global_pool=False, cls = True, fu=True):
+    def __init__(self, spa_img_size=(224, 224),spe_img_size=(5,5), spa_patch_size=16, spe_patch_size=2, in_chans=3, hid_chans = 64, embed_dim=64, nclass=10, drop_path=0.0, depth=4, bi=True, 
+                 norm_layer=nn.LayerNorm, global_pool=True, cls = True, fu=True):
         super().__init__()
 
         self.dimen_redu = nn.Sequential(

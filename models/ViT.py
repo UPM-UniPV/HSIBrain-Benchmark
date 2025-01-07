@@ -206,7 +206,7 @@ Vision Transformer for hyperspectral brain images classification/segmentation, b
 and a number of bands equal to 25. The classes are [tumor, vein, artery, normal, duraMater].
 '''
 class ViT (nn.Module):
-    def __init__(self, patchSize, nBlocks, mlp_dim, numHeads, caf=False, easyAtt=False, embedDim=64, numClasses=4, dropout=0.1, dropPath=0.1, channels=25):
+    def __init__(self, patchSize=7, nBlocks=5, mlp_dim=4, numHeads=16, caf=False, easyAtt=False, embedDim=64, numClasses=4, dropout=0.1, dropPath=0.1, channels=25):
         super().__init__()
 
         self.patchSize = patchSize
