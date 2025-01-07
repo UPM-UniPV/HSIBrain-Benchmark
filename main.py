@@ -118,7 +118,7 @@ def get_args_parser():
     parser.add_argument('--decay-rate', '--dr', type=float, default=0.1, metavar='RATE', help='LR decay rate (default: 0.1)')
     
     # Dataset parameters
-    parser.add_argument('--db-name', default='madrid', type=str, help='dataset name')
+    parser.add_argument('--db-name', default='Madrid', type=str, help='dataset name')
     parser.add_argument('--data-path', default='/home/domenico/Desktop/test_modelli/datasets/Madrid/hsi/', type=str, help='dataset path') #/home/domenico/Desktop/dataset_experiments/CUBES_cal_alt/
     parser.add_argument('--gt-path', default='/home/domenico/Desktop/test_modelli/datasets/Madrid/gt/', type=str, help='dataset path') #/home/domenico/Desktop/dataset_experiments/HSI_GT/npyFiles/
     parser.add_argument('--channels', type=int, default=25, help='Number of channels in the dataset')
@@ -163,8 +163,8 @@ def select_model(args):
     elif args.model_type == 'LiteDwNet':
         model = LiteDwNet(in_chns=args.channels, patch_size=args.patch_size, out_classes=args.classes)
     elif args.model_type == 'ViM':
-        model = VisionMamba(image_size=args.patch_size, patch_size=args.patch_size, num_classes=args.classes, channels=args.channels) #embed_dim=args.embed_dim, depth=args.blocks, drop_rate=args.drop, , rms_norm=True, residual_in_fp32=True, fused_add_norm=True, final_pool_type='mean', if_abs_pos_embed=True, if_rope=False, if_rope_residual=False, bimamba_type="v2", if_cls_token=True, if_divide_out=True, use_middle_cls_token=False
-        #model.patch_embed = models.extraLayers.PatchEmbedding(args.patch_size, embed_dim=192) #changes the patchembedding layer to adapt to the input format, embed_dim = args.embed_dim
+        model = VisionMamba(img_size=args.patch_size, patch_size=args.patch_size, num_classes=args.classes, channels=args.channels, embed_dim=192, depth=5) #embed_dim=args.embed_dim, depth=args.blocks, drop_rate=args.drop, , rms_norm=True, residual_in_fp32=True, fused_add_norm=True, final_pool_type='mean', if_abs_pos_embed=True, if_rope=False, if_rope_residual=False, bimamba_type="v2", if_cls_token=True, if_divide_out=True, use_middle_cls_token=False
+        model.patch_embed = models.extraLayers.PatchEmbedding(args.patch_size, embedDim=192) #changes the patchembedding layer to adapt to the input format, embed_dim = args.embed_dim
     elif args.model_type == 'HSIMamba':
         model = nn.Sequential(
             models.extraLayers.PermuteLayer(0,2,3,1), #adapt the patch to the required input format (B, H, W, C)
@@ -176,7 +176,7 @@ def select_model(args):
         model = mamba_SS_model(spa_img_size=(args.patch_size, args.patch_size), spe_img_size=(3,3), spa_patch_size=3, spe_patch_size=2, in_chans=args.channels, nclass=args.classes,
                                hid_chans=64, embed_dim=64, global_pool=True)
     elif args.model_type == 'HiT':
-        if args.db_name == 'madrid':
+        if args.db_name == 'Madrid':
             if args.large_features:
                 embed_dims = [128, 128, 256, 256]
             else:

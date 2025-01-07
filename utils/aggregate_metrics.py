@@ -22,7 +22,7 @@ metrics = ['kappa_score', 'precision', 'recall', 'f1score', 'oacc', 'rocauc', 'a
 def get_args_parser():
     parser = argparse.ArgumentParser('Aggregate cross-validation test metrics', add_help=False)
 
-    parser.add_argument('--trackingUri', default="file:///home/domenico/mlruns_final", type=str, help='Tracking URI')
+    parser.add_argument('--trackingUri', default="file://" + os.getcwd() + "/mlruns_final", type=str, help='Tracking URI')
     parser.add_argument('--fileToSave', default="final_metrics.txt", type=str, help='File to save the metrics')
     parser.add_argument('--nfolds', default=3, type=int, help='Number of fold used for cross-validation')
     parser.set_defaults()

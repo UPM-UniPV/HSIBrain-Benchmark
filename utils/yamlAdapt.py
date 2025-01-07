@@ -2,12 +2,14 @@ import os
 import re
 
 # local dir
-root_dir = "/home/guillermo.vazquez/HSIBrain/mlruns"
+current_dir = os.getcwd()
+
+root_dir = current_dir + "/mlruns" #assuming this script is in the same folder of mlruns dir
 
 # old dir
-pattern = r"(artifact_(?:uri|location):\s*)file:///home/guille/Documents/HSIBrain_results"
+pattern = r"(artifact_(?:uri|location):\s*)file://{re.escape(current_dir)}" #something like /home/user/HSIBrain
 # local machine dir
-replacement = r"\1file:///home/guillermo.vazquez/HSIBrain"
+replacement = r"\1file://{}".format(os.path.expanduser("~"))
 
 file_extension = ".yaml"
 

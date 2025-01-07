@@ -106,7 +106,7 @@ def calculate_test_metrics(preds, labels):
     #per class
     precision_class, recall_class, fscore_class, support = precision_recall_fscore_support(test_labels, test_preds_argmax, beta=1.0, average=None, zero_division=0, labels=[0,1,2,3])
     per_class_accuracy = np.where(cm.sum(axis=1) == 0, 0, cm.diagonal() / cm.sum(axis=1))
-
+    
     kappa_score = cohen_kappa_score(test_labels, test_preds_argmax, labels=[0,1,2,3])
 
     return kappa_score, precision, recall, f1, accuracy, auc_wavg, cm, per_class_accuracy, precision_class, recall_class, fscore_class, auc_class, support
@@ -159,8 +159,8 @@ def evaluate(data_loader, model, device, criterion, args):
         outputs = model(samples)
         loss = criterion(outputs, targets)
         
-        val_preds.append(outputs)
-        val_labels.append(targets)
+        val_preds.append(outputs.cpu())
+        val_labels.append(targets.cpu())
 
         torch.cuda.synchronize()
 
@@ -170,8 +170,8 @@ def evaluate(data_loader, model, device, criterion, args):
 
         running_loss += loss.item()
 
-    val_preds = torch.cat(val_preds.cpu())
-    val_labels = torch.cat(val_labels.cpu())
+    val_preds = torch.cat(val_preds)
+    val_labels = torch.cat(val_labels)
 
     torch.cuda.synchronize()
 
@@ -180,10 +180,10 @@ def evaluate(data_loader, model, device, criterion, args):
         val_preds = tools.gather_tensor(val_preds)
         val_labels = tools.gather_tensor(val_labels)
     
-    kappa_score, precision, recall, f1, accuracy, roc_auc, cm = calculate_metrics(val_preds, val_labels)
+    kappa_score, precision, recall, f1, accuracy, roc_auc, roc_auc_class, cm = calculate_metrics(val_preds, val_labels)
     avg_loss = running_loss /(len(data_loader)*args.world_size)
     
-    return {"avg_loss":avg_loss, "kappa_score": kappa_score, "precision":precision, "recall":recall, "f1score": f1, "oacc":accuracy, "rocauc":roc_auc, "cm":cm}
+    return {"avg_loss":avg_loss, "kappa_score": kappa_score, "precision":precision, "recall":recall, "f1score": f1, "oacc":accuracy, "rocauc":roc_auc, "rocHT":roc_auc_class[0], "rocTT":roc_auc_class[1], "rocBT":roc_auc_class[2], "rocDM":roc_auc_class[3], "cm":cm}
 
 @torch.no_grad()
 def test_evaluate(data_loader, model, device, args):
