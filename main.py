@@ -50,20 +50,25 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 import mlflow
+from mlflow.tracking import MlflowClient
 
 warnings.filterwarnings("ignore", category=UserWarning, module='torch.optim.lr_scheduler') #suppressing warning due to lr_scheduler accing current lr
 warnings.filterwarnings("ignore", category=DeprecationWarning)
-
-#mlflow.set_tracking_uri(Path(f"/home/{os.getenv("USER")}/mlruns").as_uri())
+exclude_params = ['inference', 'run_id', 'tracking_uri', 'device', 'data_path', 'gt_path', 'weighted_sampler', 'sys_metrics', 'num_workers', 'pin_mem', 'distributed', 'world_size', 'dist_eval', 'ngpus', 'nodes']
 
 def get_args_parser():
+    
     parser = argparse.ArgumentParser('Training and evaluation script', add_help=False)
+    
+    parser.add_argument('--inference', action='store_true', default=False, help='Perform inference only - no training')
+    parser.add_argument('--run-id', default='4b5f59d9505a466bb6fd381b2fe993e1', type=str, help='MLFlow Run ID to be used for inference')
+    parser.add_argument('--tracking-uri', default="file://" + os.getcwd() + "/mlruns_final", type=str, help='MLFlow tracking URI')
 
     # Basic parameters
-    parser.add_argument('--model-type', default='ViT', type=str, help='Model type (default: "ViT")')
-    parser.add_argument('--batch-size', default=512, type=int, help='Batch size') #8192 to be used with LARS
+    parser.add_argument('--model-type', default='MamTrans', type=str, help='Model type (default: "ViT")')
+    parser.add_argument('--batch-size', default=64, type=int, help='Batch size') #8192 to be used with LARS
     parser.add_argument('--epochs', default=1, type=int, help='Total epochs to run')
-    parser.add_argument('--device', default='cuda', help='device to use for training / testing')
+    parser.add_argument('--device', default='cuda', help='Device to use for training / testing')
     parser.add_argument('--seed', default=0, type=int)
 
     # ViT parameters
@@ -101,27 +106,27 @@ def get_args_parser():
 
     # Learning rate schedule parameters
     parser.add_argument('--sched', default='cosine', type=str, metavar='SCHEDULER', help='LR scheduler (default: "cosine"')
-    parser.add_argument('--lr', type=float, default=1e-3, metavar='LR', help='learning rate (default: 1e-3)')
-    parser.add_argument('--lr-noise', type=float, nargs='+', default=None, metavar='pct, pct', help='learning rate noise on/off epoch percentages')
-    parser.add_argument('--lr-noise-pct', type=float, default=0.67, metavar='PERCENT', help='learning rate noise limit percent (default: 0.67)')
-    parser.add_argument('--lr-noise-std', type=float, default=1.0, metavar='STDDEV', help='learning rate noise std-dev (default: 1.0)')
-    parser.add_argument('--warmup-lr', type=float, default=1e-6, metavar='LR', help='warmup learning rate (default: 1e-6)')
+    parser.add_argument('--lr', type=float, default=1e-3, metavar='LR', help='Learning rate (default: 1e-3)')
+    parser.add_argument('--lr-noise', type=float, nargs='+', default=None, metavar='pct, pct', help='Learning rate noise on/off epoch percentages')
+    parser.add_argument('--lr-noise-pct', type=float, default=0.67, metavar='PERCENT', help='Learning rate noise limit percent (default: 0.67)')
+    parser.add_argument('--lr-noise-std', type=float, default=1.0, metavar='STDDEV', help='Learning rate noise std-dev (default: 1.0)')
+    parser.add_argument('--warmup-lr', type=float, default=1e-6, metavar='LR', help='Warmup learning rate (default: 1e-6)')
     parser.add_argument('--t-initial', type=int, default=50, help='Initial T value for cosine scheduler')
-    parser.add_argument('--min-lr', type=float, default=1e-5, metavar='LR', help='lower lr bound for cyclic schedulers that hit 0 (1e-5)')
-    parser.add_argument('--decay-epochs', type=float, default=10, metavar='N', help='epoch interval to decay LR')
-    parser.add_argument('--cycle-mul', type=float, default=1.3, metavar='N', help='cycle multiplier for cosine restarts')
-    parser.add_argument('--cycle-limit', type=int, default=7, metavar='N', help='cycle limit for cosine restarts')
-    parser.add_argument('--cycle-decay', type=int, default=0.9, metavar='N', help='cycle decay for cosine restarts')
-    parser.add_argument('--warmup-epochs', type=int, default=5, metavar='N', help='epochs to warmup LR, if scheduler supports')
-    parser.add_argument('--cooldown-epochs', type=int, default=5, metavar='N', help='epochs to cooldown LR at min_lr, after cyclic schedule ends')
-    parser.add_argument('--patience-epochs', type=int, default=10, metavar='N', help='patience epochs for Plateau LR scheduler (default: 10')
+    parser.add_argument('--min-lr', type=float, default=1e-5, metavar='LR', help='Lower lr bound for cyclic schedulers that hit 0 (1e-5)')
+    parser.add_argument('--decay-epochs', type=float, default=10, metavar='N', help='Epoch interval to decay LR')
+    parser.add_argument('--cycle-mul', type=float, default=1.3, metavar='N', help='Cycle multiplier for cosine restarts')
+    parser.add_argument('--cycle-limit', type=int, default=7, metavar='N', help='Cycle limit for cosine restarts')
+    parser.add_argument('--cycle-decay', type=int, default=0.9, metavar='N', help='Cycle decay for cosine restarts')
+    parser.add_argument('--warmup-epochs', type=int, default=5, metavar='N', help='Epochs to warmup LR, if scheduler supports')
+    parser.add_argument('--cooldown-epochs', type=int, default=5, metavar='N', help='Epochs to cooldown LR at min_lr, after cyclic schedule ends')
+    parser.add_argument('--patience-epochs', type=int, default=10, metavar='N', help='Patience epochs for Plateau LR scheduler (default: 10')
     parser.add_argument('--decay-rate', '--dr', type=float, default=0.1, metavar='RATE', help='LR decay rate (default: 0.1)')
     
     # Dataset parameters
-    parser.add_argument('--db-name', default='Madrid', type=str, help='dataset name')
-    parser.add_argument('--data-path', default='/home/domenico/Desktop/test_modelli/datasets/Madrid/hsi/', type=str, help='dataset path') #/home/domenico/Desktop/dataset_experiments/CUBES_cal_alt/
-    parser.add_argument('--gt-path', default='/home/domenico/Desktop/test_modelli/datasets/Madrid/gt/', type=str, help='dataset path') #/home/domenico/Desktop/dataset_experiments/HSI_GT/npyFiles/
-    parser.add_argument('--channels', type=int, default=25, help='Number of channels in the dataset')
+    parser.add_argument('--db-name', default='LP', type=str, help='Dataset name')
+    parser.add_argument('--data-path', default='/home/domenico/Desktop/res_Guillermo/datasets/LP/hsi/', type=str, help='Dataset path') #/home/domenico/Desktop/dataset_experiments/CUBES_cal_alt/
+    parser.add_argument('--gt-path', default='/home/domenico/Desktop/res_Guillermo/datasets/LP/gt/', type=str, help='Dataset path') #/home/domenico/Desktop/dataset_experiments/HSI_GT/npyFiles/
+    parser.add_argument('--channels', type=int, default=128, help='Number of channels in the dataset')
     parser.add_argument('--train-pcg', default='0.7', type=float, help='Train set split percentage')
     parser.add_argument('--val-pcg', default='0.1', type=float, help='Validation set split percentage')
     parser.add_argument('--densify-labels', default=[2,3], nargs='+', type=int, help="Labels to densify")
@@ -130,7 +135,7 @@ def get_args_parser():
 
     # Distributed training parameters
     parser.add_argument('--distributed', action='store_true', default=False, help='Enabling distributed training')
-    parser.add_argument('--world-size', default=1, type=int, help='number of distributed processes')
+    parser.add_argument('--world-size', default=1, type=int, help='Number of distributed processes')
     parser.add_argument('--dist-eval', action='store_true', default=False, help='Enabling distributed evaluation')
 
     # Mlflow parameters
@@ -200,6 +205,9 @@ def select_model(args):
     return model
 
 def main(args):
+    os.environ['MLFLOW_TRACKING_URI'] = args.tracking_uri
+    #os.environ["MLFLOW_TRACKING_URI"] = "file:///home/ragusa/HSIBrain/TEST" #TEST
+
     tools.init_distributed_mode(args)
     temp_dir = Path(f"./tmp")
 
@@ -208,12 +216,51 @@ def main(args):
     run_name = f'{args.job_name}_{args.model_type}-{args.db_name}-{args.patch_size}-run-{datetime.now().strftime("%Y%m%d_%H%M%S")}' #args.job_name if run with submitit
     run_description = f'Analyze the behavior of the {args.model_type} using a recent version of the {args.db_name} HSI dataset.'
 
+    if args.inference:
+        run_data = None
+        experiment_data = None
+        if not args.run_id:
+            print('Run ID not provided')
+            exit()
+        else:
+            client = MlflowClient()
+            experiments = client.search_experiments()
+            run_found = False
+            for experiment in experiments:
+                runs = client.search_runs(experiment_ids=[experiment.experiment_id])
+
+                for run in runs:
+                    if run.info.run_id == args.run_id:
+                        run_found = True
+                        break
+
+                if run_found == True:
+                    break
+
+            if run_found == False:
+                print(f'Run {args.run_id} not found')
+                exit()
+            else:
+                run_data = client.get_run(args.run_id)
+                mlflow_params = run_data.data.params 
+
+                for param, value in mlflow_params.items(): #update args with the ones saved in the run
+                    if hasattr(args, param) and param not in exclude_params:  
+                        if value != 'None':
+                            param_type = type(getattr(args, param)) 
+                            setattr(args, param, param_type(value))
+
+        run_name = run_data.info.run_name
+
+    print("Run name:", run_name)
+
     #log
     if tools.is_main_process():
         print(args)
-        mlflow.set_experiment(experiment_name=experiment_name)
-        mlflow.set_experiment_tag('mlflow.note.content', experiment_description)
-
+        if not args.inference:
+            mlflow.set_experiment(experiment_name=experiment_name)
+            mlflow.set_experiment_tag('mlflow.note.content', experiment_description)
+            
         temp_dir.mkdir(exist_ok=True)
 
     device = torch.device(args.device)
@@ -253,182 +300,190 @@ def main(args):
     validation_ids.extend(T_val_ids)
     test_ids.extend(T_test_ids)
 
+    print("Train set:", train_ids)
+    print("Validation set:", validation_ids)
+    print("Test set:", test_ids)
+
     train_val_ids.extend(train_ids)
     train_val_ids.extend(validation_ids)
     """ ********* """
-      
+    
     min_vect, max_vect = tools.min_max_norm_val(args.data_path, args.gt_path, train_val_ids, args.channels)
-
-    train_data, train_labels, train_lab_count_noDens, _  = tools.loadImagesData(args.data_path, args.gt_path, train_ids, patch_size=args.patch_size, labelsToDensify=args.densify_labels, labelsToAugment=args.augment_labels, minMaxVects=[min_vect, max_vect])
-    val_data, val_labels, val_lab_count_noDens, _ = tools.loadImagesData(args.data_path, args.gt_path, validation_ids, patch_size=args.patch_size, labelsToDensify=[], labelsToAugment=[], minMaxVects=[min_vect, max_vect])
-
-    counts = train_lab_count_noDens + val_lab_count_noDens
-    #unique, counts = np.unique(fnp.concatenate((train_lab_count_noDens, val_lab_count_noDens)), return_counts=True)
-
-    raw_weights = {int(i): sum(counts) / count for i, count in enumerate(counts)}
-
-    #weights normalization
-    class_weights = {cls: weight / sum(raw_weights.values()) for cls, weight in raw_weights.items()}
-
-    weights = [class_weights[i] for i in range(len(class_weights))]
-    class_weights_tensor = torch.tensor(weights, dtype=torch.float32, device=device)
-
-    train_data=torch.from_numpy(train_data).type(torch.FloatTensor)
-    train_labels=torch.from_numpy(train_labels).type(torch.LongTensor)
-    val_data=torch.from_numpy(val_data).type(torch.FloatTensor)
-    val_labels=torch.from_numpy(val_labels).type(torch.LongTensor)
-
-    dataset_train = TensorDataset(train_data,train_labels)
-    dataset_val = TensorDataset(val_data,val_labels)
-
-    if args.distributed:
-        num_tasks = tools.get_world_size()
-        global_rank = tools.get_rank()
-        sampler_train = torch.utils.data.DistributedSampler(dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True)
-        if args.dist_eval:
-            if len(dataset_val) % num_tasks != 0:
-                print('Warning: Enabling distributed evaluation with an eval dataset not divisible by process number. '
-                    'This will slightly alter validation results as extra duplicate entries are added to achieve '
-                    'equal num of samples per-process.')
-            sampler_val = torch.utils.data.DistributedSampler(dataset_val, num_replicas=num_tasks, rank=global_rank, shuffle=False)
-        else:
-            sampler_val = torch.utils.data.SequentialSampler(dataset_val)
-    else:
-        if args.weighted_sampler:
-            sampler_train = torch.utils.data.WeightedRandomSampler(class_weights_tensor, len(dataset_train), replacement=True)
-        else:
-            sampler_train = torch.utils.data.RandomSampler(dataset_train)
-            sampler_val = torch.utils.data.SequentialSampler(dataset_val)
-
-    data_loader_train = torch.utils.data.DataLoader(
-        dataset_train, sampler=sampler_train,
-        batch_size=args.batch_size,
-        num_workers=args.num_workers,
-        pin_memory=args.pin_mem,
-        drop_last=True
-    )
-
-    data_loader_val = torch.utils.data.DataLoader(
-        dataset_val, sampler=sampler_val,
-        batch_size=args.batch_size,
-        num_workers=args.num_workers,
-        pin_memory=args.pin_mem,
-        drop_last=False
-    )
-
     
-    model = select_model(args)
-    model.to(device)
+    if not args.inference:
+        train_data, train_labels, train_lab_count_noDens, _  = tools.loadImagesData(args.data_path, args.gt_path, train_ids, patch_size=args.patch_size, labelsToDensify=args.densify_labels, labelsToAugment=args.augment_labels, minMaxVects=[min_vect, max_vect])
+        val_data, val_labels, val_lab_count_noDens, _ = tools.loadImagesData(args.data_path, args.gt_path, validation_ids, patch_size=args.patch_size, labelsToDensify=[], labelsToAugment=[], minMaxVects=[min_vect, max_vect])
 
-    model_without_ddp = model
-    if args.distributed:
-        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
-        model_without_ddp = model.module
-    n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        counts = train_lab_count_noDens + val_lab_count_noDens
+        #unique, counts = np.unique(fnp.concatenate((train_lab_count_noDens, val_lab_count_noDens)), return_counts=True)
 
-    _optimizer = create_optimizer(args, model_without_ddp)
-    if args.use_larc == True:
-        optimizer = LARC(_optimizer)
+        raw_weights = {int(i): sum(counts) / count for i, count in enumerate(counts)}
 
-    if args.sched == 'cosine_restart':
-        lr_scheduler = CosineLRScheduler(_optimizer, t_initial=args.t_initial, cycle_limit=args.cycle_limit, cycle_mul=args.cycle_mul, k_decay=args.decay_rate, lr_min=args.min_lr, warmup_t=args.warmup_epochs, warmup_lr_init=args.warmup_lr)
-    else:
-        lr_scheduler, _ = create_scheduler(args, _optimizer)
+        #weights normalization
+        class_weights = {cls: weight / sum(raw_weights.values()) for cls, weight in raw_weights.items()}
 
-    if args.criterion == 'cross_entropy':
-        criterion = torch.nn.CrossEntropyLoss()
-    elif args.criterion == 'weighted_cross_entropy':
-        criterion = torch.nn.CrossEntropyLoss(weight=class_weights_tensor)   
-    elif args.criterion == 'focal':
-        criterion = FocalLoss(alpha=None, reduction='mean', gamma=args.gamma, weight=class_weights_tensor)
-    else:
-        print('Criterion not found')
-        exit()
-        
-    # log
-    if tools.is_main_process():
-        mlflow.start_run(log_system_metrics=args.sys_metrics, run_name=run_name, description=run_description)
-        for key, value in vars(args).items():
-            mlflow.log_param(key, value)
-        mlflow.log_param("n_parameters", n_parameters)
-        best_val_loss = float('inf')
-        start_time = time.time()
+        weights = [class_weights[i] for i in range(len(class_weights))]
+        class_weights_tensor = torch.tensor(weights, dtype=torch.float32, device=device)
 
-    if args.distributed:
-        dist.barrier()
+        train_data=torch.from_numpy(train_data).type(torch.FloatTensor)
+        train_labels=torch.from_numpy(train_labels).type(torch.LongTensor)
+        val_data=torch.from_numpy(val_data).type(torch.FloatTensor)
+        val_labels=torch.from_numpy(val_labels).type(torch.LongTensor)
 
-    #TRAINING
-    for epoch in range(args.epochs):
+        dataset_train = TensorDataset(train_data,train_labels)
+        dataset_val = TensorDataset(val_data,val_labels)
+
         if args.distributed:
-            data_loader_train.sampler.set_epoch(epoch)
-
+            num_tasks = tools.get_world_size()
+            global_rank = tools.get_rank()
+            sampler_train = torch.utils.data.DistributedSampler(dataset_train, num_replicas=num_tasks, rank=global_rank, shuffle=True)
             if args.dist_eval:
-                data_loader_val.sampler.set_epoch(epoch)
+                if len(dataset_val) % num_tasks != 0:
+                    print('Warning: Enabling distributed evaluation with an eval dataset not divisible by process number. '
+                        'This will slightly alter validation results as extra duplicate entries are added to achieve '
+                        'equal num of samples per-process.')
+                sampler_val = torch.utils.data.DistributedSampler(dataset_val, num_replicas=num_tasks, rank=global_rank, shuffle=False)
+            else:
+                sampler_val = torch.utils.data.SequentialSampler(dataset_val)
+        else:
+            if args.weighted_sampler:
+                sampler_train = torch.utils.data.WeightedRandomSampler(class_weights_tensor, len(dataset_train), replacement=True)
+            else:
+                sampler_train = torch.utils.data.RandomSampler(dataset_train)
+                sampler_val = torch.utils.data.SequentialSampler(dataset_val)
 
-        train_stats = train_epoch(model, data_loader_train, optimizer, device, criterion, args)
-        val_stats = evaluate(data_loader_val, model, device, criterion, args)
-    
+        data_loader_train = torch.utils.data.DataLoader(
+            dataset_train, sampler=sampler_train,
+            batch_size=args.batch_size,
+            num_workers=args.num_workers,
+            pin_memory=args.pin_mem,
+            drop_last=True
+        )
+
+        data_loader_val = torch.utils.data.DataLoader(
+            dataset_val, sampler=sampler_val,
+            batch_size=args.batch_size,
+            num_workers=args.num_workers,
+            pin_memory=args.pin_mem,
+            drop_last=False
+        )
+
         if args.distributed:
             dist.barrier()
 
-        # log
-        training_log_stats = {**{f'training_{k}': v for k, v in train_stats.items()},
-                    f'validation_avg_loss': val_stats["avg_loss"],
-                    f'learningRate': _optimizer.param_groups[0]['lr']}
-        validation_metrics_stats = {**{f'validation_{k}': v for k, v in val_stats.items() if k != 'cm' and k != 'avg_loss'}}
-    
-        if tools.is_main_process():
-            plt.figure(figsize=(12, 12))
-            sns.heatmap(val_stats["cm"], annot=True, fmt="d")
-            plt.ylabel('True Label')
-            plt.xlabel('Predicted Label')
-            plt.title('Confusion Matrix')
-            plt.savefig(os.path.join(temp_dir,f"validation_confusion_matrix.png"))
-            plt.close()
+        model = select_model(args)
+        model.to(device)
 
-            if(val_stats["avg_loss"] < best_val_loss):
-                best_val_loss = val_stats["avg_loss"]
-                if args.distributed:
-                    model_to_save = model.module
-                else:
-                    model_to_save = model
-                torch.save(model_to_save.state_dict(), os.path.join(temp_dir,f'{args.model_type}_best_model_{run_name}.pth'))
-
-            mlflow.log_artifact(os.path.join(temp_dir,f"validation_confusion_matrix.png"), run_name)
-
-            mlflow.log_metrics(training_log_stats, epoch)
-            mlflow.log_metrics(validation_metrics_stats, epoch)
-
-        #to next epoch
-        if args.sched == 'plateau':
-            lr_scheduler.step(val_stats["avg_loss"])
-        elif args.sched == 'cosine' or args.sched == 'cosine_restart':
-            lr_scheduler.step(epoch)
-        else:
-            print('Scheduler not found')
-            exit()
-
-    # log and register model
-    if tools.is_main_process():
+        model_without_ddp = model
         if args.distributed:
-            model_to_save = model.module
+            model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
+            model_without_ddp = model.module
+        n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+        _optimizer = create_optimizer(args, model_without_ddp)
+        if args.use_larc == True:
+            optimizer = LARC(_optimizer)
+
+        if args.sched == 'cosine_restart':
+            lr_scheduler = CosineLRScheduler(_optimizer, t_initial=args.t_initial, cycle_limit=args.cycle_limit, cycle_mul=args.cycle_mul, k_decay=args.decay_rate, lr_min=args.min_lr, warmup_t=args.warmup_epochs, warmup_lr_init=args.warmup_lr)
         else:
-            model_to_save = model
-        X_sample = torch.randn(1, args.channels, args.patch_size, args.patch_size).to(device)
-        y_sample = model(X_sample)
-        signature = mlflow.models.signature.infer_signature(X_sample.cpu().numpy(), y_sample.cpu().detach().numpy())
+            lr_scheduler, _ = create_scheduler(args, _optimizer)
 
-        mlflow.pytorch.log_model(model_to_save, f'{args.model_type}_best_model_{run_name}', signature=signature, registered_model_name=f'best_model_{run_name}')
+        if args.criterion == 'cross_entropy':
+            criterion = torch.nn.CrossEntropyLoss()
+        elif args.criterion == 'weighted_cross_entropy':
+            criterion = torch.nn.CrossEntropyLoss(weight=class_weights_tensor)   
+        elif args.criterion == 'focal':
+            criterion = FocalLoss(alpha=None, reduction='mean', gamma=args.gamma, weight=class_weights_tensor)
+        else:
+            print('Criterion not found')
+            exit()
+            
+        # log
+        if tools.is_main_process():
+            mlflow.start_run(log_system_metrics=args.sys_metrics, run_name=run_name, description=run_description)
+            for key, value in vars(args).items():
+                mlflow.log_param(key, value)
+            mlflow.log_param("n_parameters", n_parameters)
+            best_val_loss = float('inf')
+            start_time = time.time()
 
-        total_time = time.time() - start_time
-        mlflow.log_param('total_training_time',  total_time)
+        if args.distributed:
+            dist.barrier()
 
-    if args.distributed:
-        dist.barrier()
+        #TRAINING
+        for epoch in range(args.epochs):
+            if args.distributed:
+                data_loader_train.sampler.set_epoch(epoch)
+
+                if args.dist_eval:
+                    data_loader_val.sampler.set_epoch(epoch)
+
+            train_stats = train_epoch(model, data_loader_train, optimizer, device, criterion, args)
+            val_stats = evaluate(data_loader_val, model, device, criterion, args)
+        
+            if args.distributed:
+                dist.barrier()
+
+            # log
+            training_log_stats = {**{f'training_{k}': v for k, v in train_stats.items()},
+                        f'validation_avg_loss': val_stats["avg_loss"],
+                        f'learningRate': _optimizer.param_groups[0]['lr']}
+            validation_metrics_stats = {**{f'validation_{k}': v for k, v in val_stats.items() if k != 'cm' and k != 'avg_loss'}}
+        
+            if tools.is_main_process():
+                plt.figure(figsize=(12, 12))
+                sns.heatmap(val_stats["cm"], annot=True, fmt="d")
+                plt.ylabel('True Label')
+                plt.xlabel('Predicted Label')
+                plt.title('Confusion Matrix')
+                plt.savefig(os.path.join(temp_dir,f"validation_confusion_matrix.png"))
+                plt.close()
+
+                if(val_stats["avg_loss"] < best_val_loss):
+                    best_val_loss = val_stats["avg_loss"]
+                    if args.distributed:
+                        model_to_save = model.module
+                    else:
+                        model_to_save = model
+                    torch.save(model_to_save.state_dict(), os.path.join(temp_dir,f'{args.model_type}_best_model_{run_name}.pth'))
+
+                mlflow.log_artifact(os.path.join(temp_dir,f"validation_confusion_matrix.png"), run_name)
+
+                mlflow.log_metrics(training_log_stats, epoch)
+                mlflow.log_metrics(validation_metrics_stats, epoch)
+
+            #to next epoch
+            if args.sched == 'plateau':
+                lr_scheduler.step(val_stats["avg_loss"])
+            elif args.sched == 'cosine' or args.sched == 'cosine_restart':
+                lr_scheduler.step(epoch)
+            else:
+                print('Scheduler not found')
+                exit()
+
+        # log and register model
+        if tools.is_main_process():
+            if args.distributed:
+                model_to_save = model.module
+            else:
+                model_to_save = model
+            X_sample = torch.randn(1, args.channels, args.patch_size, args.patch_size).to(device)
+            y_sample = model(X_sample)
+            signature = mlflow.models.signature.infer_signature(X_sample.cpu().numpy(), y_sample.cpu().detach().numpy())
+
+            mlflow.pytorch.log_model(model_to_save, f'{args.model_type}_best_model_{run_name}', signature=signature, registered_model_name=f'best_model_{run_name}')
+
+            total_time = time.time() - start_time
+            mlflow.log_param('total_training_time',  total_time)
+
+        if args.distributed:
+            dist.barrier()
 
     
-    model = select_model(args)
-    model.load_state_dict(torch.load(os.path.join(temp_dir,f'{args.model_type}_best_model_{run_name}.pth'), weights_only=True))
+    #model = select_model(args)
+    #model.load_state_dict(torch.load(client.download_artifacts(args.run_id, f'{args.model_type}_best_model_{run_name}.pth'), weights_only=True))
+    model = mlflow.pytorch.load_model(f"models:/best_model_{run_name}/latest") #load last registered model
     model.to(device)
 
     if args.distributed:
@@ -468,11 +523,9 @@ def main(args):
         if tools.is_main_process():
             for key, value in test_stats.items():
                 if isinstance(value, np.ndarray):
-                    test_stats[key] = value.tolist()  # convert NumPy array to list
+                    test_stats[key] = value.tolist()
             with open(os.path.join(temp_dir,f'{test_image}_test_metrics.json'), 'w') as json_file:
                 json.dump(test_stats, json_file, indent=4)
-
-            mlflow.log_artifact(os.path.join(temp_dir,f'{test_image}_test_metrics.json'), run_name)
 
             data_reshaped_argmax = np.reshape(test_preds_argmax, (height, width))
             data_reshaped_softmax = np.reshape(test_preds_softmax, (height, width, args.classes))
@@ -494,8 +547,15 @@ def main(args):
             plt.savefig(os.path.join(temp_dir,f'{run_name}_{test_image}_prob.png'))
             plt.close()
 
-            mlflow.log_artifact(os.path.join(temp_dir,f'{run_name}_{test_image}.png'), run_name)
-            mlflow.log_artifact(os.path.join(temp_dir,f'{run_name}_{test_image}_prob.png'), run_name)
+            if args.inference:
+                with mlflow.start_run(run_id=args.run_id) as run:
+                    mlflow.log_artifact(os.path.join(temp_dir,f'{test_image}_test_metrics.json'), run_name)
+                    mlflow.log_artifact(os.path.join(temp_dir,f'{run_name}_{test_image}.png'), run_name)
+                    mlflow.log_artifact(os.path.join(temp_dir,f'{run_name}_{test_image}_prob.png'), run_name)
+            else:
+                mlflow.log_artifact(os.path.join(temp_dir,f'{test_image}_test_metrics.json'))
+                mlflow.log_artifact(os.path.join(temp_dir,f'{run_name}_{test_image}.png'))
+                mlflow.log_artifact(os.path.join(temp_dir,f'{run_name}_{test_image}_prob.png'))
 
 
     if tools.is_main_process():
@@ -507,7 +567,7 @@ def main(args):
         dist.destroy_process_group()        
 
 if __name__ == '__main__':
-	parser = argparse.ArgumentParser('Training and evaluation script', parents=[get_args_parser()])
+	parser = argparse.ArgumentParser('Training and Evaluation Script', parents=[get_args_parser()])
 	args = parser.parse_args()
 
 	main(args)

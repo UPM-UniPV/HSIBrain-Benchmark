@@ -29,6 +29,7 @@ def calculate_metrics(preds, labels):
 
     """ AUC """
     auc_class = np.array([-1.,-1.,-1.,-1.])
+    auc_wavg = -1.
     roc_auc_list, weights = [], []
     n_samples = len(val_labels)
 
@@ -39,21 +40,26 @@ def calculate_metrics(preds, labels):
 
     active_vect = np.where(np.array([healthy_gt, tumor_gt, vessel_gt, outer_gt]))[0]
 
-    for l in active_vect:
-        y_binary = (val_labels == l).astype(int)
-        y_prob_l = val_preds_softmax[:, l]
+    if len(active_vect)>1:
+        for l in active_vect:
+            y_binary = (val_labels == l).astype(int)
+            y_prob_l = val_preds_softmax[:, l]
 
-		# Calculate ROC AUC for the current class
-        roc_auc = roc_auc_score(y_binary, y_prob_l)
-        roc_auc_list.append(roc_auc)
+            # Calculate ROC AUC for the current class
+            try:
+                roc_auc = roc_auc_score(y_binary, y_prob_l)
+                roc_auc_list.append(roc_auc)
 
-        # Calculate the weight for the current class
-        weight = np.sum(y_binary) / n_samples
-        weights.append(weight)
+                # Calculate the weight for the current class
+                weight = np.sum(y_binary) / n_samples
+                weights.append(weight)
+            except ValueError:
+                print(f"ROC AUC couldn't be calculated for class {l}")
+                roc_auc_list.append(-1)
 
-    auc_c = np.array(roc_auc_list)
-    auc_wavg = np.sum(auc_c * np.array(weights))
-    auc_class[active_vect] = auc_c
+        auc_c = np.array(roc_auc_list)
+        auc_wavg = np.sum(auc_c * np.array(weights))
+        auc_class[active_vect] = auc_c
 
     kappa_score = cohen_kappa_score(val_labels, val_preds_argmax, labels=[0,1,2,3])
 
@@ -77,6 +83,7 @@ def calculate_test_metrics(preds, labels):
     #roc per class + overall
     """ AUC """
     auc_class = np.array([-1.,-1.,-1.,-1.])
+    auc_wavg = -1.
     roc_auc_list, weights = [], []
     n_samples = len(test_labels)
 
@@ -87,25 +94,30 @@ def calculate_test_metrics(preds, labels):
 
     active_vect = np.where(np.array([healthy_gt, tumor_gt, vessel_gt, outer_gt]))[0]
 
-    for l in active_vect:
-        y_binary = (test_labels == l).astype(int)
-        y_prob_l = test_preds_softmax[:, l]
+    if len(active_vect)>1:
+        for l in active_vect:
+            y_binary = (test_labels == l).astype(int)
+            y_prob_l = test_preds_softmax[:, l]
 
-		# Calculate ROC AUC for the current class
-        roc_auc = roc_auc_score(y_binary, y_prob_l)
-        roc_auc_list.append(roc_auc)
+            # Calculate ROC AUC for the current class
+            try:
+                roc_auc = roc_auc_score(y_binary, y_prob_l)
+                roc_auc_list.append(roc_auc)
 
-        # Calculate the weight for the current class
-        weight = np.sum(y_binary) / n_samples
-        weights.append(weight)
+                # Calculate the weight for the current class
+                weight = np.sum(y_binary) / n_samples
+                weights.append(weight)
+            except ValueError:
+                print(f"ROC AUC couldn't be calculated for class {l}")
+                roc_auc_list.append(-1)
 
-    auc_c = np.array(roc_auc_list)
-    auc_wavg = np.sum(auc_c * np.array(weights))
-    auc_class[active_vect] = auc_c
+        auc_c = np.array(roc_auc_list)
+        auc_wavg = np.sum(auc_c * np.array(weights))
+        auc_class[active_vect] = auc_c
 
     #per class
     precision_class, recall_class, fscore_class, support = precision_recall_fscore_support(test_labels, test_preds_argmax, beta=1.0, average=None, zero_division=0, labels=[0,1,2,3])
-    per_class_accuracy = np.where(cm.sum(axis=1) == 0, 0, cm.diagonal() / cm.sum(axis=1))
+    per_class_accuracy = np.where(cm.sum(axis=1) == 0, -1, cm.diagonal() / cm.sum(axis=1))
     
     kappa_score = cohen_kappa_score(test_labels, test_preds_argmax, labels=[0,1,2,3])
 
