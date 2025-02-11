@@ -56,6 +56,7 @@ def calculate_metrics(preds, labels):
             except ValueError:
                 print(f"ROC AUC couldn't be calculated for class {l}")
                 roc_auc_list.append(-1)
+                weights.append(0)
 
         auc_c = np.array(roc_auc_list)
         auc_wavg = np.sum(auc_c * np.array(weights))
@@ -110,6 +111,7 @@ def calculate_test_metrics(preds, labels):
             except ValueError:
                 print(f"ROC AUC couldn't be calculated for class {l}")
                 roc_auc_list.append(-1)
+                weights.append(0)
 
         auc_c = np.array(roc_auc_list)
         auc_wavg = np.sum(auc_c * np.array(weights))
