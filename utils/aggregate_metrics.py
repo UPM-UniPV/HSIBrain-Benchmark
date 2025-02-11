@@ -17,14 +17,14 @@ import pandas as pd
 
 import math
 
-metrics = ['kappa_score', 'precision', 'recall', 'f1score', 'oacc', 'rocauc', 'acc_perclass', 'precision_perclass', 'recall_perclass', 'f1score_perclass', 'auc_perclass']
+metrics = ['kappa_score', 'precision', 'recall', 'f1score', 'oacc', 'rocauc', 'acc_perclass', 'precision_perclass', 'recall_perclass', 'f1score_perclass', 'roc_class']
 
 def get_args_parser():
     parser = argparse.ArgumentParser('Aggregate cross-validation test metrics', add_help=False)
 
-    parser.add_argument('--trackingUri', default="file://" + os.getcwd() + "/mlruns_final", type=str, help='Tracking URI')
+    parser.add_argument('--trackingUri', default="file://" + os.getcwd() + "/mlruns_final_prev", type=str, help='Tracking URI')
     parser.add_argument('--fileToSave', default="final_metrics.txt", type=str, help='File to save the metrics')
-    parser.add_argument('--nfolds', default=3, type=int, help='Number of fold used for cross-validation')
+    parser.add_argument('--nfolds', default=5, type=int, help='Number of fold used for cross-validation')
     parser.set_defaults()
 
     return parser
@@ -52,7 +52,7 @@ def load_metrics_from_run(directory_uri):
         "precision_perclass": [],
         "recall_perclass": [],
         "f1score_perclass": [],
-        "auc_perclass": []
+        "roc_class": []
     }
     
     for json_file in json_files:
@@ -72,68 +72,84 @@ def load_metrics_from_run(directory_uri):
             metrics["precision_perclass"].append(data.get("precision_class",0))
             metrics["recall_perclass"].append(data.get("recall_class",0))
             metrics["f1score_perclass"].append(data.get("fscore_class",0))
-            metrics["auc_perclass"].append(data.get("auc_c",0))
-    
+            metrics["roc_class"].append(data.get("roc_class", 0))
+
     return metrics
     
 def global_metrics(model_metrics, nfolds):
     aggregated_results = {}
 
-    for job_name, seed_metrics in model_metrics.items():
-        all_metrics = {}
-        for seed in range(nfolds):
-            if str(seed) in seed_metrics:
-                for metric in metrics:
-                    if metric not in all_metrics:
-                        all_metrics[metric] = []
-                    all_metrics[metric].extend(seed_metrics[str(seed)].get(metric, []))
+    for db_name, jobs in model_metrics.items():
+        if db_name not in aggregated_results:
+            aggregated_results[db_name] = {}
 
+        for job_name, seed_metrics in jobs.items():
+            all_metrics = {}
 
-        aggregated_results[job_name] = {}
-        for metric_name, values in all_metrics.items():
-            if values == []:
-                continue
+            for seed in range(nfolds):
+                if str(seed) in seed_metrics:
+                    for metric in seed_metrics[str(seed)]:
+                        if metric not in all_metrics:
+                            all_metrics[metric] = []
+                        all_metrics[metric].extend(seed_metrics[str(seed)].get(metric, []))
 
-            aggregated_results.setdefault(job_name, {}).setdefault(metric_name, {})
+            aggregated_results[db_name][job_name] = {"num_params": model_metrics[db_name][job_name]["num_params"]}
 
-            if isinstance(values[0], list):
-                aggregated_results[job_name][metric_name] = {
-                    "mean": np.mean(values, axis=1)*100,
-                    "stddev": np.std(values, axis=1)*100
-                }
-            else:
-                aggregated_results[job_name][metric_name] = {
-                    "mean": np.mean(values) * 100,
-                    "stddev": np.std(values) * 100
-                }
+            for metric_name, values in all_metrics.items():
+                if not values: 
+                    continue
+
+                aggregated_results[db_name][job_name].setdefault(metric_name, {})
+
+                if isinstance(values, list):
+                    values = np.array(values)
+                    filtered_values = np.where(values == -1, np.nan, values)
+                    aggregated_results[db_name][job_name][metric_name] = {
+                        "mean": np.nanmean(filtered_values, axis=0) * 100,
+                        "stddev": np.nanstd(filtered_values, axis=0) * 100
+                    }
+                else:
+                    aggregated_results[db_name][job_name][metric_name] = { #single value, not a list. It should never happen unless the test set has a single image
+                        "mean": values,
+                        "stddev": 0
+                    }
+
 
     return aggregated_results
 
 def fold_metrics(model_metrics, nfolds):
     fm = {}
 
-    for job_name, seed_metrics in model_metrics.items():
-        for seed in range(nfolds):
-            if str(seed) in seed_metrics:
-                for metric in metrics:
-                    metric_values = seed_metrics[str(seed)].get(metric, [])
+    for db_name, jobs in model_metrics.items():
+        if db_name not in fm:
+            fm[db_name] = {}
 
-                    fm.setdefault(job_name, {}).setdefault(str(seed), {}).setdefault(metric, {})
-                    
-                    if metric_values == []:
-                        continue
+        for job_name, seed_metrics in jobs.items():
+            if job_name not in fm[db_name]:
+                fm[db_name][job_name] = {}
 
-                    if isinstance(metric_values[0], list):
-                        fm[job_name][str(seed)][metric] = {
-                            "mean": np.mean(metric_values, axis=1) * 100,
-                            "stddev": np.std(metric_values, axis=1) * 100
-                        }
-                    else:
-                        fm[job_name][str(seed)][metric] = {
-                            "mean": np.mean(metric_values) * 100,
-                            "stddev": np.std(metric_values) * 100
-                        }
+            for seed in range(nfolds):
+                if str(seed) in seed_metrics:
+                    for metric in seed_metrics[str(seed)]:
+                        metric_values = seed_metrics[str(seed)].get(metric, [])
 
+                        fm.setdefault(db_name, {}).setdefault(job_name, {}).setdefault(str(seed), {}).setdefault(metric, {})
+
+                        if not metric_values:
+                            continue
+
+                        if isinstance(metric_values, list):
+                            metric_values = np.array(metric_values)
+                            filtered_values = np.where(metric_values == -1, np.nan, metric_values)
+                            fm[db_name][job_name][str(seed)][metric] = {
+                                "mean": np.nanmean(filtered_values, axis=0) * 100,
+                                "stddev": np.nanstd(filtered_values, axis=0) * 100
+                            }
+                        else:
+                            fm[db_name][job_name][str(seed)][metric] = {
+                                "mean": metric_values, #single value, not a list. It should never happen unless the test set has a single image
+                                "stddev": 0
+                            }
     return fm
 
 def main(args):
@@ -144,7 +160,7 @@ def main(args):
     experiments = client.search_experiments()
 
     table_global = PrettyTable()
-    table_global.field_names = ["Dataset", "Model", 'Kappa score', 'Precision', 'Recall', 'F1', 'OACC', 'ROCAUC', "", "ACC Healthy", "ACC Tumor", "ACC Blood", "ACC Dura", "Precision Healthy", "Precision Tumor", "Precision Blood", "Precision Dura", "Recall Healthy", "Recall Tumor", "Recall Blood", "Recall Dura", "F1 Healthy", "F1 Tumor", "F1 Blood", "F1 Dura", "AUC Healthy", "AUC Tumor", "AUC Blood", "AUC Dura"]
+    table_global.field_names = ["Dataset", "Model", "N. Params", 'Kappa score', 'Precision', 'Recall', 'F1', 'OACC', 'ROCAUC', "", "ACC Healthy", "ACC Tumor", "ACC Blood", "ACC Dura", "Precision Healthy", "Precision Tumor", "Precision Blood", "Precision Dura", "Recall Healthy", "Recall Tumor", "Recall Blood", "Recall Dura", "F1 Healthy", "F1 Tumor", "F1 Blood", "F1 Dura", "AUC Healthy", "AUC Tumor", "AUC Blood", "AUC Dura"]
 
     fold_tables = [PrettyTable() for _ in range(nfolds)]
     for f, table_fold in enumerate(fold_tables):
@@ -156,100 +172,105 @@ def main(args):
 
         for run in runs:
             db_name = run.data.params.get("db_name", None)
-            job_name = run.data.params.get("job_name", None)
+            job_name = run.data.params.get("job_name", None).strip()
             seed = run.data.params.get("seed", None)
+            n_params = run.data.params.get("n_parameters", 0)
 
             artifact_uri = run.info.artifact_uri
             metrics = load_metrics_from_run(artifact_uri)
-        
-            if job_name is not None:
-                if seed is not None:
-                    if job_name not in models_metrics:
-                        models_metrics[job_name] = {}
-                    if seed not in models_metrics[job_name]:
-                        models_metrics[job_name][seed] = metrics
-        
-            gm = global_metrics(models_metrics, nfolds)
-            fm = fold_metrics(models_metrics, nfolds)
 
-            for job_name, gm in gm.items():
-                table_global.add_row([
+            if db_name is not None:
+                if job_name is not None:
+                    if seed is not None:
+                        if db_name not in models_metrics:
+                            models_metrics[db_name] = {}
+                        if job_name not in models_metrics[db_name]:
+                            models_metrics[db_name][job_name] = {"num_params": n_params}
+                        models_metrics[db_name][job_name][seed] = metrics
+        
+    gm = global_metrics(models_metrics, nfolds)
+    fm = fold_metrics(models_metrics, nfolds)
+
+    for db_name, jobs in gm.items():
+        for job_name, job_metrics in jobs.items():
+            table_global.add_row([
+                db_name, job_name, job_metrics.get('num_params',0),
+                f"{job_metrics.get('kappa_score', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {job_metrics.get('kappa_score', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",
+                f"{job_metrics.get('precision', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {job_metrics.get('precision', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",
+                f"{job_metrics.get('recall', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {job_metrics.get('recall', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",
+                f"{job_metrics.get('f1score', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {job_metrics.get('f1score', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",
+                f"{job_metrics.get('oacc', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {job_metrics.get('oacc', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",
+                f"{job_metrics.get('rocauc', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {job_metrics.get('rocauc', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",
+                "",
+                f"{job_metrics.get('acc_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][0]:.2f} ± {job_metrics.get('acc_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][0]:.2f}",
+                f"{job_metrics.get('acc_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][1]:.2f} ± {job_metrics.get('acc_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][1]:.2f}",
+                f"{job_metrics.get('acc_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][2]:.2f} ± {job_metrics.get('acc_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][2]:.2f}",
+                f"{job_metrics.get('acc_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][3]:.2f} ± {job_metrics.get('acc_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][3]:.2f}",
+                f"{job_metrics.get('precision_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][0]:.2f} ± {job_metrics.get('precision_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][0]:.2f}",
+                f"{job_metrics.get('precision_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][1]:.2f} ± {job_metrics.get('precision_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][1]:.2f}",
+                f"{job_metrics.get('precision_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][2]:.2f} ± {job_metrics.get('precision_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][2]:.2f}",
+                f"{job_metrics.get('precision_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][3]:.2f} ± {job_metrics.get('precision_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][3]:.2f}",
+                f"{job_metrics.get('recall_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][0]:.2f} ± {job_metrics.get('recall_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][0]:.2f}",
+                f"{job_metrics.get('recall_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][1]:.2f} ± {job_metrics.get('recall_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][1]:.2f}",
+                f"{job_metrics.get('recall_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][2]:.2f} ± {job_metrics.get('recall_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][2]:.2f}",
+                f"{job_metrics.get('recall_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][3]:.2f} ± {job_metrics.get('recall_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][3]:.2f}",
+                f"{job_metrics.get('f1score_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][0]:.2f} ± {job_metrics.get('f1score_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][0]:.2f}",
+                f"{job_metrics.get('f1score_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][1]:.2f} ± {job_metrics.get('f1score_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][1]:.2f}",
+                f"{job_metrics.get('f1score_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][2]:.2f} ± {job_metrics.get('f1score_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][2]:.2f}",
+                f"{job_metrics.get('f1score_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][3]:.2f} ± {job_metrics.get('f1score_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][3]:.2f}",
+                f"{job_metrics.get('roc_class', {'mean': math.nan, 'stddev': math.nan})['mean'][0]:.2f} ± {job_metrics.get('roc_class', {'mean': math.nan, 'stddev': math.nan})['stddev'][0]:.2f}",
+                f"{job_metrics.get('roc_class', {'mean': math.nan, 'stddev': math.nan})['mean'][1]:.2f} ± {job_metrics.get('roc_class', {'mean': math.nan, 'stddev': math.nan})['stddev'][1]:.2f}",
+                f"{job_metrics.get('roc_class', {'mean': math.nan, 'stddev': math.nan})['mean'][2]:.2f} ± {job_metrics.get('roc_class', {'mean': math.nan, 'stddev': math.nan})['stddev'][2]:.2f}",
+                f"{job_metrics.get('roc_class', {'mean': math.nan, 'stddev': math.nan})['mean'][3]:.2f} ± {job_metrics.get('roc_class', {'mean': math.nan, 'stddev': math.nan})['stddev'][3]:.2f}"
+            ])
+
+    for db_name, jobs in fm.items():  
+        for job_name, folds in jobs.items():  
+            for fold in folds.keys(): 
+                fold_tables[int(fold)].add_row([
                     db_name, job_name,
-                    f"{gm.get('kappa_score', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {gm.get('kappa_score', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",
-                    f"{gm.get('precision', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {gm.get('precision', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",
-                    f"{gm.get('recall', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {gm.get('recall', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",
-                    f"{gm.get('f1score', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {gm.get('f1score', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",
-                    f"{gm.get('oacc', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {gm.get('oacc', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",
-                    f"{gm.get('rocauc', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {gm.get('rocauc', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",
+                    f"{folds[fold].get('kappa_score', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {folds[fold].get('kappa_score', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",
+                    f"{folds[fold].get('precision', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {folds[fold].get('precision', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",
+                    f"{folds[fold].get('recall', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {folds[fold].get('recall', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",
+                    f"{folds[fold].get('f1score', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {folds[fold].get('f1score', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",
+                    f"{folds[fold].get('oacc', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {folds[fold].get('oacc', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",
+                    f"{folds[fold].get('rocauc', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {folds[fold].get('rocauc', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",
                     "",
-                    f"{gm.get('acc_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][0]:.2f} ± {gm.get('acc_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][0]:.2f}",
-                    f"{gm.get('acc_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][1]:.2f} ± {gm.get('acc_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][1]:.2f}",
-                    f"{gm.get('acc_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][2]:.2f} ± {gm.get('acc_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][2]:.2f}",
-                    f"{gm.get('acc_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][3]:.2f} ± {gm.get('acc_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][3]:.2f}",
-                    f"{gm.get('precision_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][0]:.2f} ± {gm.get('precision_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][0]:.2f}",
-                    f"{gm.get('precision_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][1]:.2f} ± {gm.get('precision_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][1]:.2f}",
-                    f"{gm.get('precision_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][2]:.2f} ± {gm.get('precision_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][2]:.2f}",
-                    f"{gm.get('precision_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][3]:.2f} ± {gm.get('precision_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][3]:.2f}",
-                    f"{gm.get('recall_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][0]:.2f} ± {gm.get('recall_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][0]:.2f}",
-                    f"{gm.get('recall_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][1]:.2f} ± {gm.get('recall_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][1]:.2f}",
-                    f"{gm.get('recall_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][2]:.2f} ± {gm.get('recall_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][2]:.2f}",
-                    f"{gm.get('recall_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][3]:.2f} ± {gm.get('recall_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][3]:.2f}",
-                    f"{gm.get('f1score_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][0]:.2f} ± {gm.get('f1score_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][0]:.2f}",
-                    f"{gm.get('f1score_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][1]:.2f} ± {gm.get('f1score_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][1]:.2f}",
-                    f"{gm.get('f1score_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][2]:.2f} ± {gm.get('f1score_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][2]:.2f}",
-                    f"{gm.get('f1score_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][3]:.2f} ± {gm.get('f1score_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][3]:.2f}",
-                    f"{gm.get('auc_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][0]:.2f} ± {gm.get('auc_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][0]:.2f}",
-                    f"{gm.get('auc_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][1]:.2f} ± {gm.get('auc_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][1]:.2f}",
-                    f"{gm.get('auc_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][2]:.2f} ± {gm.get('auc_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][2]:.2f}",
-                    f"{gm.get('auc_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][3]:.2f} ± {gm.get('auc_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][3]:.2f}"
+                    f"{folds[fold].get('acc_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][0]:.2f} ± {folds[fold].get('acc_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][0]:.2f}",
+                    f"{folds[fold].get('acc_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][1]:.2f} ± {folds[fold].get('acc_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][1]:.2f}",
+                    f"{folds[fold].get('acc_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][2]:.2f} ± {folds[fold].get('acc_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][2]:.2f}",
+                    f"{folds[fold].get('acc_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][3]:.2f} ± {folds[fold].get('acc_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][3]:.2f}",
+                    f"{folds[fold].get('precision_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][0]:.2f} ± {folds[fold].get('precision_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][0]:.2f}",
+                    f"{folds[fold].get('precision_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][1]:.2f} ± {folds[fold].get('precision_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][1]:.2f}",
+                    f"{folds[fold].get('precision_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][2]:.2f} ± {folds[fold].get('precision_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][2]:.2f}",
+                    f"{folds[fold].get('precision_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][3]:.2f} ± {folds[fold].get('precision_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][3]:.2f}",
+                    f"{folds[fold].get('recall_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][0]:.2f} ± {folds[fold].get('recall_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][0]:.2f}",
+                    f"{folds[fold].get('recall_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][1]:.2f} ± {folds[fold].get('recall_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][1]:.2f}",
+                    f"{folds[fold].get('recall_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][2]:.2f} ± {folds[fold].get('recall_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][2]:.2f}",
+                    f"{folds[fold].get('recall_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][3]:.2f} ± {folds[fold].get('recall_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][3]:.2f}",
+                    f"{folds[fold].get('f1score_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][0]:.2f} ± {folds[fold].get('f1score_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][0]:.2f}",
+                    f"{folds[fold].get('f1score_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][1]:.2f} ± {folds[fold].get('f1score_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][1]:.2f}",
+                    f"{folds[fold].get('f1score_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][2]:.2f} ± {folds[fold].get('f1score_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][2]:.2f}",
+                    f"{folds[fold].get('f1score_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][3]:.2f} ± {folds[fold].get('f1score_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][3]:.2f}",
+                    f"{folds[fold].get('roc_class', {'mean': math.nan, 'stddev': math.nan})['mean'][0]:.2f} ± {folds[fold].get('roc_class', {'mean': math.nan, 'stddev': math.nan})['stddev'][0]:.2f}",
+                    f"{folds[fold].get('roc_class', {'mean': math.nan, 'stddev': math.nan})['mean'][1]:.2f} ± {folds[fold].get('roc_class', {'mean': math.nan, 'stddev': math.nan})['stddev'][1]:.2f}",
+                    f"{folds[fold].get('roc_class', {'mean': math.nan, 'stddev': math.nan})['mean'][2]:.2f} ± {folds[fold].get('roc_class', {'mean': math.nan, 'stddev': math.nan})['stddev'][2]:.2f}",
+                    f"{folds[fold].get('roc_class', {'mean': math.nan, 'stddev': math.nan})['mean'][3]:.2f} ± {folds[fold].get('roc_class', {'mean': math.nan, 'stddev': math.nan})['stddev'][3]:.2f}"
                 ])
-
-            for job_name, fm_dic in fm.items():
-                for fold in fm_dic.keys():
-                    fold_tables[int(fold)].add_row([
-                        db_name, job_name,
-                        f"{fm_dic[fold].get('kappa_score', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {fm_dic[fold].get('kappa_score', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",
-                        f"{fm_dic[fold].get('precision', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {fm_dic[fold].get('precision', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",
-                        f"{fm_dic[fold].get('recall', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {fm_dic[fold].get('recall', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",
-                        f"{fm_dic[fold].get('f1score', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {fm_dic[fold].get('f1score', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",
-                        f"{fm_dic[fold].get('oacc', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {fm_dic[fold].get('oacc', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",
-                        f"{fm_dic[fold].get('rocauc', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {fm_dic[fold].get('rocauc', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",
-                        "",
-                        f"{fm_dic[fold].get('acc_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][0]:.2f} ± {fm_dic[fold].get('acc_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][0]:.2f}",
-                        f"{fm_dic[fold].get('acc_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][1]:.2f} ± {fm_dic[fold].get('acc_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][1]:.2f}",
-                        f"{fm_dic[fold].get('acc_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][2]:.2f} ± {fm_dic[fold].get('acc_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][2]:.2f}",
-                        f"{fm_dic[fold].get('acc_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][3]:.2f} ± {fm_dic[fold].get('acc_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][3]:.2f}",
-                        f"{fm_dic[fold].get('precision_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][0]:.2f} ± {fm_dic[fold].get('precision_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][0]:.2f}",
-                        f"{fm_dic[fold].get('precision_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][1]:.2f} ± {fm_dic[fold].get('precision_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][1]:.2f}",
-                        f"{fm_dic[fold].get('precision_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][2]:.2f} ± {fm_dic[fold].get('precision_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][2]:.2f}",
-                        f"{fm_dic[fold].get('precision_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][3]:.2f} ± {fm_dic[fold].get('precision_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][3]:.2f}",
-                        f"{fm_dic[fold].get('recall_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][0]:.2f} ± {fm_dic[fold].get('recall_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][0]:.2f}",
-                        f"{fm_dic[fold].get('recall_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][1]:.2f} ± {fm_dic[fold].get('recall_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][1]:.2f}",
-                        f"{fm_dic[fold].get('recall_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][2]:.2f} ± {fm_dic[fold].get('recall_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][2]:.2f}",
-                        f"{fm_dic[fold].get('recall_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][3]:.2f} ± {fm_dic[fold].get('recall_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][3]:.2f}",
-                        f"{fm_dic[fold].get('f1score_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][0]:.2f} ± {fm_dic[fold].get('f1score_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][0]:.2f}",
-                        f"{fm_dic[fold].get('f1score_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][1]:.2f} ± {fm_dic[fold].get('f1score_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][1]:.2f}",
-                        f"{fm_dic[fold].get('f1score_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][2]:.2f} ± {fm_dic[fold].get('f1score_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][2]:.2f}",
-                        f"{fm_dic[fold].get('f1score_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][3]:.2f} ± {fm_dic[fold].get('f1score_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][3]:.2f}",
-                        f"{fm_dic[fold].get('auc_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][0]:.2f} ± {fm_dic[fold].get('auc_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][0]:.2f}",
-                        f"{fm_dic[fold].get('auc_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][1]:.2f} ± {fm_dic[fold].get('auc_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][1]:.2f}",
-                        f"{fm_dic[fold].get('auc_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][2]:.2f} ± {fm_dic[fold].get('auc_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][2]:.2f}",
-                        f"{fm_dic[fold].get('auc_perclass', {'mean': math.nan, 'stddev': math.nan})['mean'][3]:.2f} ± {fm_dic[fold].get('auc_perclass', {'mean': math.nan, 'stddev': math.nan})['stddev'][3]:.2f}"
-                    ])
                         
-
-    #sort according to db_name
-    table_data_global = sorted([row for row in table_global if row[0] is not None], key=lambda x: x[0])
+    # sort according to db_name
+    table_global.sortby = "Dataset"
 
     table_data_fold = []
     for f, table_fold in enumerate(fold_tables):
-        table_data_fold.append(sorted([row for row in table_fold if row[0] is not None], key=lambda x: x[0]))
-
+        table_fold.sortby = "Dataset"
+        table_data_fold.append(table_fold)
 
     ## PRINT TABLES
     file = open(args.fileToSave, "w")
-    file.write(table_data_global.get_string())
+    file.write(table_global.get_string())
     file.write("\n\n")
+    file.write("Metrics per fold\n\n")
     for f, table_fold in enumerate(table_data_fold):
         file.write(f"Fold {f}\n")
         file.write(table_fold.get_string())
