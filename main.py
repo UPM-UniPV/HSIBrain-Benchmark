@@ -576,12 +576,8 @@ def main(args):
 
         # log and register model
         if tools.is_main_process():
-            if args.distributed:
-                model_to_save = model.module
-            else:
-                model_to_save = model
-            X_sample = torch.randn(
-                1, args.channels, args.patch_size, args.patch_size).to(device)
+            model.load_state_dict(torch.load(os.path.join(temp_dir, f'{args.model_type}_best_model_{run_name}.pth'))).to(device)
+            X_sample = torch.randn(1, args.channels, args.patch_size, args.patch_size).to(device)
             y_sample = model(X_sample)
             signature = mlflow.models.signature.infer_signature(
                 X_sample.cpu().numpy(), y_sample.cpu().detach().numpy())
@@ -597,8 +593,8 @@ def main(args):
 
     # model = select_model(args)
     # model.load_state_dict(torch.load(client.download_artifacts(args.run_id, f'{args.model_type}_best_model_{run_name}.pth'), weights_only=True))
-    model = mlflow.pytorch.load_model(
-        f"models:/best_model_{run_name}/latest")  # load last registered model
+    del model
+    model = mlflow.pytorch.load_model(f"models:/best_model_{run_name}/latest")  # load last registered model
     model.to(device)
 
     if args.distributed:
