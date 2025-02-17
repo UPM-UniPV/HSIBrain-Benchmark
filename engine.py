@@ -75,6 +75,8 @@ def calculate_metrics(preds, labels):
 
     kappa_score = cohen_kappa_score(
         val_labels, val_preds_argmax, labels=[0, 1, 2, 3])
+    if len(set(val_labels)) == 1:
+        kappa_score = -1
 
     return kappa_score, precision, recall, f1, accuracy, auc_wavg, auc_class, cm
 
@@ -101,11 +103,17 @@ def calculate_test_metrics(preds, labels):
     # per class
     precision_class, recall_class, fscore_class, support = precision_recall_fscore_support(
         test_labels, test_preds_argmax, beta=1.0, average=None, zero_division=0, labels=[0, 1, 2, 3])
-    per_class_accuracy = np.where(
-        cm.sum(axis=1) == 0, -1, cm.diagonal() / cm.sum(axis=1))
+    
+    precision_class = np.where(support == 0, -1, precision_class)
+    recall_class = np.where(support == 0, -1, recall_class)
+    fscore_class = np.where(support == 0, -1, fscore_class)
+
+    per_class_accuracy = np.where(support == 0, -1, cm.diagonal() / np.maximum(cm.sum(axis=1), 1))
 
     kappa_score = cohen_kappa_score(
         test_labels, test_preds_argmax, labels=[0, 1, 2, 3])
+    if len(set(test_labels)) == 1:
+        kappa_score = -1
 
     return kappa_score, precision, recall, f1, accuracy, auc_wavg, cm, per_class_accuracy, precision_class, recall_class, fscore_class, auc_class, support
 
