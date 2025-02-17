@@ -5,7 +5,7 @@ mamba_ssm==1.2.2
 matplotlib==3.9.2
 mlflow==2.16.2
 mlflow_skinny==2.16.2
-numpy==2.1.2
+numpy==2.2.3
 opencv_python_headless==4.10.0.84
 scikit_learn==1.5.2
 seaborn==0.13.2
