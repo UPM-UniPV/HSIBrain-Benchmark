@@ -21,8 +21,7 @@ metrics = [
     'precision_perclass',
     'recall_perclass',
     'f1score_perclass',
-    'roc_class'
-    ]
+    'roc_class']
 
 
 def get_args_parser():
@@ -294,7 +293,7 @@ def main(args):
     for db_name, jobs in gm.items():
         for job_name, job_metrics in jobs.items():
             table_global.add_row([
-                db_name, job_name, job_metrics.get('num_params',0),
+                db_name, job_name, job_metrics.get('num_params', 0),
                 f"{job_metrics.get('kappa_score', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {job_metrics.get('kappa_score', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",
                 f"{job_metrics.get('precision', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {job_metrics.get('precision', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",
                 f"{job_metrics.get('recall', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {job_metrics.get('recall', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",

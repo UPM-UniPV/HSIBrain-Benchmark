@@ -14,7 +14,8 @@ from timm.models.vision_transformer import _cfg, _load_weights
 from torch import Tensor
 
 from models.vim.mamba_ssm.modules.mamba_simple import Mamba
-from models.vim.rope import *
+# from models.vim.rope import *
+from models.vim.rope import vim_tiny_patch16_224, vim_small_patch16_224, vim_base_patch16_224, vim_tiny_patch16_384, vim_small_patch16_384, vim_base_patch16_384, VisionRotaryEmbeddingFast
 
 try:
     from models.vim.mamba_ssm.ops.triton.layernorm import (RMSNorm,

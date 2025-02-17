@@ -122,8 +122,7 @@ class Mamba(nn.Module):
         # dt_max
         dt = torch.exp(
             torch.rand(self.d_inner, **factory_kwargs) *
-            (math.log(dt_max) - math.log(dt_min))
-            + math.log(dt_min)
+            (math.log(dt_max) - math.log(dt_min)) + math.log(dt_min)
         ).clamp(min=dt_init_floor)
         # Inverse of softplus: https://github.com/pytorch/pytorch/issues/72759
         inv_dt = dt + torch.log(-torch.expm1(-dt))

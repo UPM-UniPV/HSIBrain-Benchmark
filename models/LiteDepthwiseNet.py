@@ -77,9 +77,9 @@ class LiteDwNet(nn.Module):
         self.patch_size = patch_size
 
         """"
-		FUNCTION TO CALCULATE OUT CHANNELS AT THE END OF BOTH BRANCHES
-		-> THERE IS A CONV THAT HAS KERNEL SIZE OF THE TOTAL AMOUNT OF REMAINING CHANNELS
-		"""
+        FUNCTION TO CALCULATE OUT CHANNELS AT THE END OF BOTH BRANCHES
+        -> THERE IS A CONV THAT HAS KERNEL SIZE OF THE TOTAL AMOUNT OF REMAINING CHANNELS
+        """
 
         self.input_stem = nn.Sequential(nn.Conv3d(in_dims, 24, (7, 1, 1), bias=False),
                                         nn.BatchNorm3d(24),
@@ -89,14 +89,16 @@ class LiteDwNet(nn.Module):
                                          DWConvBlock(48, 12, (3, 3, 3), groups=48, pad=1))
 
         self.right_branch = nn.Sequential(GroupConvBlock(24, 48, 1, groups=3),
-                                        DWConvBlock(48, 12, (3, 3, 3), groups=48, pad=1),
-										DWConvBlock(12, 12, (3, 3, 3), groups=12, pad=1))
+                                          DWConvBlock(
+            48, 12, (3, 3, 3), groups=48, pad=1),
+            DWConvBlock(12, 12, (3, 3, 3), groups=12, pad=1))
 
         shape = self.get_chanel_dim()
 
         self.joint_branch = nn.Sequential(DWConvBlock(48, 60, (shape[2], 3, 3), groups=48, pad=(0, 1, 1)),
-                                          GlobalAveragePool([3, 4], transpose_feats=True),
-                                          nn.Linear(60, out_classes))
+                                          GlobalAveragePool(
+            [3, 4], transpose_feats=True),
+            nn.Linear(60, out_classes))
 
     def get_chanel_dim(self):
 

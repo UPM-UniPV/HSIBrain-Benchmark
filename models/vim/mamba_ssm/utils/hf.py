@@ -22,7 +22,7 @@ def load_state_dict_hf(model_name, device=None, dtype=None):
         _raise_exceptions_for_missing_entries=False)
     return torch.load(resolved_archive_file, map_location=mapped_device)
     # Convert dtype before moving to GPU to save memory
-    if dtype is not None:
-        state_dict = {k: v.to(dtype=dtype) for k, v in state_dict.items()}
-    state_dict = {k: v.to(device=device) for k, v in state_dict.items()}
-    return state_dict
+    # if dtype is not None:
+    #    state_dict = {k: v.to(dtype=dtype) for k, v in state_dict.items()}
+    # state_dict = {k: v.to(device=device) for k, v in state_dict.items()}
+    # return state_dict

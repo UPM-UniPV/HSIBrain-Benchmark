@@ -124,9 +124,9 @@ def get_cube_and_GT(idp, data_path, gt_path, patch_size, minMaxVects):
         c_yx = np.stack((Y.ravel(), X.ravel()), axis=1) + patch_size // 2
 
         y_min = c_yx[:, 0] - patch_size // 2
-        y_max = c_yx[:, 0] + 1 + patch_size // 2
+        # y_max = c_yx[:, 0] + 1 + patch_size // 2
         x_min = c_yx[:, 1] - patch_size // 2
-        x_max = c_yx[:, 1] + 1 + patch_size // 2
+        # x_max = c_yx[:, 1] + 1 + patch_size // 2
 
         y_grid, x_grid = np.meshgrid(
             np.arange(patch_size), np.arange(patch_size), indexing='ij')
@@ -169,10 +169,10 @@ def loadImagesData(hsi_path, gt_path, imglist, patch_size,
             minMaxVects[0] / (minMaxVects[1] - minMaxVects[0]
                               )  # min-max normalization
 
-        for l in np.unique(labels)[
+        for label in np.unique(labels)[
                 1:]:  # labels 0 -> background, assumption: each image has background
             if patch_size > 1:
-                label_mask = (labels == l).astype('uint8')
+                label_mask = (labels == label).astype('uint8')
                 c_yx = np.stack(np.where(label_mask > 0), axis=1)
 
                 hsi_dataset = np.pad(hsi_dataset, ((patch_size // 2, patch_size // 2),
@@ -181,9 +181,9 @@ def loadImagesData(hsi_path, gt_path, imglist, patch_size,
                                          (patch_size // 2, patch_size // 2)), "constant")
 
                 y_min = c_yx[:, 0] - patch_size // 2
-                y_max = c_yx[:, 0] + 1 + patch_size // 2
+                # y_max = c_yx[:, 0] + 1 + patch_size // 2
                 x_min = c_yx[:, 1] - patch_size // 2
-                x_max = c_yx[:, 1] + 1 + patch_size // 2
+                # x_max = c_yx[:, 1] + 1 + patch_size // 2
 
                 y_grid, x_grid = np.meshgrid(
                     np.arange(patch_size), np.arange(patch_size), indexing='ij')
@@ -192,11 +192,11 @@ def loadImagesData(hsi_path, gt_path, imglist, patch_size,
                                     x_min[:, np.newaxis, np.newaxis] + x_grid, :]
 
             else:
-                samps = hsi_dataset[labels == l, np.newaxis, np.newaxis, :]
+                samps = hsi_dataset[labels == label, np.newaxis, np.newaxis, :]
 
-            lab = np.ones(samps.shape[0]) * l
+            lab = np.ones(samps.shape[0]) * label
 
-            if l in labelsToAugment:
+            if label in labelsToAugment:
                 samps, lab = augment_patches(samps, lab)
 
             data_samps.append(samps)
@@ -227,13 +227,13 @@ def erode(img, k=3, ellipse=True):
 def densify_gt(gt, dens_labels):
     out_gt = np.zeros_like(gt)
 
-    for l in np.unique(gt)[1:]:
-        label_mask = (gt == l).astype('uint8')
+    for label in np.unique(gt)[1:]:
+        label_mask = (gt == label).astype('uint8')
 
-        if l in dens_labels:
+        if label in dens_labels:
             label_mask = erode(dilate(label_mask, k=3), k=3)
 
-        out_gt[label_mask > 0] = label_mask[label_mask > 0] * l
+        out_gt[label_mask > 0] = label_mask[label_mask > 0] * label
 
     return out_gt
 

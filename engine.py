@@ -14,6 +14,7 @@ import utils.tools as tools
 
 import time
 
+
 def calc_auc(true_labels, pred_labels):
     """ AUC """
     auc_class = np.array([-1., -1., -1., -1.])
@@ -104,12 +105,13 @@ def calculate_test_metrics(preds, labels):
     # per class
     precision_class, recall_class, fscore_class, support = precision_recall_fscore_support(
         test_labels, test_preds_argmax, beta=1.0, average=None, zero_division=0, labels=[0, 1, 2, 3])
-    
+
     precision_class = np.where(support == 0, -1, precision_class)
     recall_class = np.where(support == 0, -1, recall_class)
     fscore_class = np.where(support == 0, -1, fscore_class)
 
-    per_class_accuracy = np.where(support == 0, -1, cm.diagonal() / np.maximum(cm.sum(axis=1), 1))
+    per_class_accuracy = np.where(
+        support == 0, -1, cm.diagonal() / np.maximum(cm.sum(axis=1), 1))
 
     kappa_score = cohen_kappa_score(
         test_labels, test_preds_argmax, labels=[0, 1, 2, 3])
@@ -150,7 +152,7 @@ def train_epoch(model: torch.nn.Module, data_loader: Iterable, optimizer: torch.
         running_loss += loss.item()
 
     # world_size = 1 if not distributed
-    avg_loss = running_loss / (len(data_loader)*args.world_size)
+    avg_loss = running_loss / (len(data_loader) * args.world_size)
     return {"avg_loss": avg_loss}
 
 
@@ -195,9 +197,10 @@ def evaluate(data_loader, model, device, criterion, args):
 
     kappa_score, precision, recall, f1, accuracy, roc_auc, roc_auc_class, cm = calculate_metrics(
         val_preds, val_labels)
-    avg_loss = running_loss / (len(data_loader)*args.world_size)
+    avg_loss = running_loss / (len(data_loader) * args.world_size)
 
-    return {"avg_loss": avg_loss, "kappa_score": kappa_score, "precision": precision, "recall": recall, "f1score": f1, "oacc": accuracy, "rocauc": roc_auc, "rocHT": roc_auc_class[0], "rocTT": roc_auc_class[1], "rocBT": roc_auc_class[2], "rocDM": roc_auc_class[3], "cm": cm}
+    return {"avg_loss": avg_loss, "kappa_score": kappa_score, "precision": precision, "recall": recall, "f1score": f1, "oacc": accuracy,
+            "rocauc": roc_auc, "rocHT": roc_auc_class[0], "rocTT": roc_auc_class[1], "rocBT": roc_auc_class[2], "rocDM": roc_auc_class[3], "cm": cm}
 
 
 @torch.no_grad()
@@ -238,10 +241,11 @@ def test_evaluate(data_loader, model, device, args):
     # remove background
     mask = (test_labels != 0)
     test_preds_noback = test_preds[mask]
-    test_preds_noback = test_preds_noback-1
-    test_labels = test_labels[mask]-1
+    test_preds_noback = test_preds_noback - 1
+    test_labels = test_labels[mask] - 1
 
     kappa_score, precision, recall, f1, accuracy, roc_auc, cm, per_class_accuracy, precision_class, recall_class, fscore_class, roc_per_class, support = calculate_test_metrics(
         test_preds_noback, test_labels)
 
-    return torch.softmax(test_preds, dim=1), {"kappa_score": kappa_score, "precision": precision, "recall": recall, "f1score": f1, "oacc": accuracy, "rocauc": roc_auc, "cm": cm, "per_class_accuracy": per_class_accuracy, "precision_class": precision_class, "recall_class": recall_class, "fscore_class": fscore_class, "roc_class": roc_per_class, "support": support, "inference_time": inference_time}
+    return torch.softmax(test_preds, dim=1), {"kappa_score": kappa_score, "precision": precision, "recall": recall, "f1score": f1, "oacc": accuracy, "rocauc": roc_auc, "cm": cm, "per_class_accuracy": per_class_accuracy,
+                                              "precision_class": precision_class, "recall_class": recall_class, "fscore_class": fscore_class, "roc_class": roc_per_class, "support": support, "inference_time": inference_time}

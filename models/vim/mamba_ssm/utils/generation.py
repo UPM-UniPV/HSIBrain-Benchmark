@@ -296,9 +296,8 @@ def update_graph_cache(
     if dtype is None:
         dtype = param_example.dtype
     if (
-        (device, dtype) != (cache.device, cache.dtype)
-        or batch_size > cache.max_batch_size
-        or max_seqlen > cache.max_seqlen
+        (device, dtype) != (cache.device,
+                            cache.dtype) or batch_size > cache.max_batch_size or max_seqlen > cache.max_seqlen
     ):  # Invalidate the cache
         cache.callables = {}
         cache.mempool = None

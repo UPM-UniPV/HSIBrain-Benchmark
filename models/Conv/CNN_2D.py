@@ -106,8 +106,8 @@ class CNxtN_2D(nn.Module):
         self.out = OutBlock(384, out_classes)
 
         """
-		ends up with AvgPool + LN + Linear(n_classes)
-		"""
+        ends up with AvgPool + LN + Linear(n_classes)
+        """
 
         self.initialize_weights()
 

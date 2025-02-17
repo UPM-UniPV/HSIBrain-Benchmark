@@ -60,8 +60,7 @@ class block_1D(nn.Module):
 def positional_embedding_1d(seq_len, embed_size):
     position_enc = torch.zeros(seq_len, embed_size)
     position = torch.arange(0, seq_len).unsqueeze(1)
-    div_term = torch.exp(torch.arange(0, embed_size, 2)
-                         * -(torch.log(torch.tensor(10000.0)) / embed_size))
+    div_term = torch.exp(torch.arange(0, embed_size, 2) * -(torch.log(torch.tensor(10000.0)) / embed_size))
     position_enc[:, 0::2] = torch.sin(position.float() * div_term)
     position_enc[:, 1::2] = torch.cos(position.float() * div_term)
     return position_enc.unsqueeze(0)

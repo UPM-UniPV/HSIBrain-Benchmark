@@ -53,7 +53,7 @@ class Attention(nn.Module):
 
     def forward(self, x, mask=None):
         # x:[b,n,dim]
-        b, n, _, h = *x.shape, self.heads
+        _, _, _, h = *x.shape, self.heads
 
         # get qkv tuple:([b,n,head_num*head_dim],[...],[...])
         qkv = self.to_qkv(x).chunk(3, dim=-1)
@@ -90,8 +90,21 @@ class Transformer(nn.Module):
         self.layers = nn.ModuleList([])
         for _ in range(depth):
             self.layers.append(nn.ModuleList([
-                Residual(PreNorm(dim, Attention(dim, heads = heads, dim_head = dim_head, dropout = dropout))),
-                Residual(PreNorm(dim, FeedForward(dim, mlp_head, dropout = dropout)))
+                Residual(
+                    PreNorm(
+                        dim,
+                        Attention(
+                            dim,
+                            heads=heads,
+                            dim_head=dim_head,
+                            dropout=dropout))),
+                Residual(
+                    PreNorm(
+                        dim,
+                        FeedForward(
+                            dim,
+                            mlp_head,
+                            dropout=dropout)))
             ]))
 
         self.mode = mode
@@ -110,9 +123,11 @@ class Transformer(nn.Module):
             nl = 0
             for attn, ff in self.layers:
                 last_output.append(x)
-                if nl > 1:             
-                    x = self.skipcat[nl-2](torch.cat([x.unsqueeze(3), last_output[nl-2].unsqueeze(3)], dim=3)).squeeze(3)
-                x = attn(x, mask = mask)
+                if nl > 1:
+                    x = self.skipcat[nl -
+                                     2](torch.cat([x.unsqueeze(3), last_output[nl -
+                                                                               2].unsqueeze(3)], dim=3)).squeeze(3)
+                x = attn(x, mask=mask)
                 x = ff(x)
                 nl += 1
 

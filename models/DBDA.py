@@ -116,34 +116,34 @@ class DBDA(nn.Module):
                                 kernel_size=(1, 1, 7), stride=(1, 1, 2))
         # Dense block
         self.batch_norm11 = nn.Sequential(
-                                    nn.BatchNorm3d(24,  eps=0.001, momentum=0.1, affine=True), # 动量默认值为0.1
-                                    #gelu_new()
-                                    #swish()
-                                    nn.Mish()
+            nn.BatchNorm3d(24, eps=0.001, momentum=0.1, affine=True),
+            # gelu_new()
+            # swish()
+            nn.Mish()
         )
         self.conv12 = nn.Conv3d(in_channels=24, out_channels=12, padding=(0, 0, 3),
                                 kernel_size=(1, 1, 7), stride=(1, 1, 1))
         self.batch_norm12 = nn.Sequential(
-                                    nn.BatchNorm3d(36, eps=0.001, momentum=0.1, affine=True),
-                                    #gelu_new()
-                                    #swish()
-                                    nn.Mish()
+            nn.BatchNorm3d(36, eps=0.001, momentum=0.1, affine=True),
+            # gelu_new()
+            # swish()
+            nn.Mish()
         )
         self.conv13 = nn.Conv3d(in_channels=36, out_channels=12, padding=(0, 0, 3),
                                 kernel_size=(1, 1, 7), stride=(1, 1, 1))
         self.batch_norm13 = nn.Sequential(
-                                    nn.BatchNorm3d(48, eps=0.001, momentum=0.1, affine=True),
-                                    #gelu_new()
-                                    #swish()
-                                    nn.Mish()
+            nn.BatchNorm3d(48, eps=0.001, momentum=0.1, affine=True),
+            # gelu_new()
+            # swish()
+            nn.Mish()
         )
         self.conv14 = nn.Conv3d(in_channels=48, out_channels=12, padding=(0, 0, 3),
                                 kernel_size=(1, 1, 7), stride=(1, 1, 1))
         self.batch_norm14 = nn.Sequential(
-                                    nn.BatchNorm3d(60, eps=0.001, momentum=0.1, affine=True),
-                                    #gelu_new()
-                                    #swish()
-                                    nn.Mish()
+            nn.BatchNorm3d(60, eps=0.001, momentum=0.1, affine=True),
+            # gelu_new()
+            # swish()
+            nn.Mish()
         )
         kernel_3d = math.floor((band - 6) / 2)
         self.conv15 = nn.Conv3d(in_channels=60, out_channels=60,
@@ -155,56 +155,66 @@ class DBDA(nn.Module):
                                 kernel_size=(1, 1, band), stride=(1, 1, 1))
         # Dense block
         self.batch_norm21 = nn.Sequential(
-                                    nn.BatchNorm3d(24, eps=0.001, momentum=0.1, affine=True),
-                                    #gelu_new()
-                                    #swish()
-                                    nn.Mish()
+            nn.BatchNorm3d(24, eps=0.001, momentum=0.1, affine=True),
+            # gelu_new()
+            # swish()
+            nn.Mish()
         )
         self.conv22 = nn.Conv3d(in_channels=24, out_channels=12, padding=(1, 1, 0),
                                 kernel_size=(3, 3, 1), stride=(1, 1, 1))
         self.batch_norm22 = nn.Sequential(
-                                    nn.BatchNorm3d(36, eps=0.001, momentum=0.1, affine=True),
-                                    #gelu_new()
-                                    #swish()
-                                    nn.Mish()
+            nn.BatchNorm3d(36, eps=0.001, momentum=0.1, affine=True),
+            # gelu_new()
+            # swish()
+            nn.Mish()
         )
         self.conv23 = nn.Conv3d(in_channels=36, out_channels=12, padding=(1, 1, 0),
                                 kernel_size=(3, 3, 1), stride=(1, 1, 1))
         self.batch_norm23 = nn.Sequential(
-                                    nn.BatchNorm3d(48, eps=0.001, momentum=0.1, affine=True),
-                                    #gelu_new()
-                                    #swish()
-                                    nn.Mish()
+            nn.BatchNorm3d(48, eps=0.001, momentum=0.1, affine=True),
+            # gelu_new()
+            # swish()
+            nn.Mish()
         )
         self.conv24 = nn.Conv3d(in_channels=48, out_channels=12, padding=(1, 1, 0),
                                 kernel_size=(3, 3, 1), stride=(1, 1, 1))
 
         self.conv25 = nn.Sequential(
-                                nn.Conv3d(in_channels=1, out_channels=1, padding=(1, 1, 0),
-                                kernel_size=(3, 3, 2), stride=(1, 1, 1)),
-                                nn.Sigmoid()
+            nn.Conv3d(in_channels=1, out_channels=1, padding=(1, 1, 0),
+                      kernel_size=(3, 3, 2), stride=(1, 1, 1)),
+            nn.Sigmoid()
         )
 
         self.batch_norm_spectral = nn.Sequential(
-                                    nn.BatchNorm3d(60,  eps=0.001, momentum=0.1, affine=True), # 动量默认值为0.1
-                                    #gelu_new(),
-                                    #swish(),
-                                    nn.Mish(),
-                                    nn.Dropout(p=0.5)
+            nn.BatchNorm3d(
+                60,
+                eps=0.001,
+                momentum=0.1,
+                affine=True),
+            # 动量默认值为0.1
+            # gelu_new(),
+            # swish(),
+            nn.Mish(),
+            nn.Dropout(p=0.5)
         )
         self.batch_norm_spatial = nn.Sequential(
-                                    nn.BatchNorm3d(60,  eps=0.001, momentum=0.1, affine=True), # 动量默认值为0.1
-                                    #gelu_new(),
-                                    #swish(),
-                                    nn.Mish(),
-                                    nn.Dropout(p=0.5)
+            nn.BatchNorm3d(
+                60,
+                eps=0.001,
+                momentum=0.1,
+                affine=True),
+            # 动量默认值为0.1
+            # gelu_new(),
+            # swish(),
+            nn.Mish(),
+            nn.Dropout(p=0.5)
         )
 
         self.global_pooling = nn.AdaptiveAvgPool3d(1)
         self.full_connection = nn.Sequential(
-                                #nn.Dropout(p=0.5),
-                                nn.Linear(120, classes) # ,
-                                # nn.Softmax()
+            # nn.Dropout(p=0.5),
+            nn.Linear(120, classes)  # ,
+            # nn.Softmax()
         )
 
         self.attention_spectral = CAM_Module(60)

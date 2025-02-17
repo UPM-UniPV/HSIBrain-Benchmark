@@ -217,11 +217,11 @@ class ConvPermuteMLP(nn.Module):
 
         self.mlp_c = nn.Sequential(
             nn.Conv2d(dim, dim, kernel_size=(1, 3), stride=1, padding=(0, 1), dilation=1, groups=dim, bias=qkv_bias),
-           # nn.Conv2d(dim, dim, kernel_size=1, bias=qkv_bias),
+            # nn.Conv2d(dim, dim, kernel_size=1, bias=qkv_bias),
         )
         self.mlp_h = nn.Sequential(
             nn.Conv2d(dim, dim, kernel_size=(3, 1), stride=1, padding=(1, 0), dilation=1, groups=dim, bias=qkv_bias),
-           # nn.Conv2d(dim, dim, kernel_size=1, bias=qkv_bias),
+            # nn.Conv2d(dim, dim, kernel_size=1, bias=qkv_bias),
         )
         self.mlp_w = nn.Conv2d(dim, dim, kernel_size=1, bias=qkv_bias)
 
@@ -293,12 +293,12 @@ class PatchEmbed(nn.Module):
         super().__init__()
 
         if large_features:
-            self.proj1_1 = Dynamic_conv3d(in_planes=1, out_planes=4, kernel_size=(2, 3, 3), ratio=8, stride=(1, 2, 2), padding=(4,1,1) )
-            self.proj2_1 = Dynamic_conv3d(in_planes=4, out_planes=8, kernel_size=(4, 3, 3), ratio=8, stride=(2, 1, 1), padding=1 )
+            self.proj1_1 = Dynamic_conv3d(in_planes=1, out_planes=4, kernel_size=(2, 3, 3), ratio=8, stride=(1, 2, 2), padding=(4, 1, 1))
+            self.proj2_1 = Dynamic_conv3d(in_planes=4, out_planes=8, kernel_size=(4, 3, 3), ratio=8, stride=(2, 1, 1), padding=1)
         else:
-            self.proj1_1 = Dynamic_conv3d(in_planes=1, out_planes=4, kernel_size=(3, 3, 3), ratio=8, stride=(2, 2, 2), padding=1, )
-            self.proj2_1 = Dynamic_conv3d(in_planes=4, out_planes=8, kernel_size=(3, 3, 3), ratio=8, stride=(2, 1, 1), padding=1, )
-        
+            self.proj1_1 = Dynamic_conv3d(in_planes=1, out_planes=4, kernel_size=(3, 3, 3), ratio=8, stride=(2, 2, 2), padding=1,)
+            self.proj2_1 = Dynamic_conv3d(in_planes=4, out_planes=8, kernel_size=(3, 3, 3), ratio=8, stride=(2, 1, 1), padding=1,)
+
     def forward(self, x):
         x = self.proj1_1(x)
         x = self.proj2_1(x)

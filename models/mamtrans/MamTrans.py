@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 from einops.layers.torch import Rearrange
 from mamba_ssm import Mamba
-from torch import nn
 
 from models.mamtrans.Embeddings import PatchEmbeddings, PositionalEmbeddings
 from models.mamtrans.rope_spectral import RotaryEmbedding

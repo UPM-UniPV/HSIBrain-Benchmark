@@ -198,7 +198,7 @@ class TBlock(nn.Module):
 
         self.dropPath = DropPath(dropPath) if dropPath > 0. else nn.Identity()
 
-        if easyAtt == False:
+        if easyAtt is False:
             self.attn = Attention(embedDim, heads, dropout)
         else:
             self.attn = DenseEasyAttn(embedDim, channels, heads)
@@ -271,7 +271,7 @@ class ViT (nn.Module):
                                             dropPath) for _ in range(nBlocks)])
 
         # CAF
-        if self.caf != False:
+        if self.caf is not False:
             self.skipcat = nn.ModuleList([])
             for _ in range(nBlocks - 2):
                 self.skipcat.append(
@@ -299,7 +299,7 @@ class ViT (nn.Module):
 
         # Transformer blocks (+CAF), adapted from
         # https://arxiv.org/pdf/2107.02988.pdf
-        if self.caf == False:
+        if self.caf is False:
             for blk in self.blocks:
                 x = blk(x)
         else:

@@ -131,7 +131,9 @@ def selective_state_update(state, x, dt, A, B, C,
     if dt_bias is not None:
         assert dt_bias.shape == (dim,)
     out = torch.empty_like(x)
-    def grid(META): return (triton.cdiv(dim, META['BLOCK_SIZE_M']), batch)
+
+    def grid(META):
+        return (triton.cdiv(dim, META['BLOCK_SIZE_M']), batch)
     z_strides = ((z.stride(0), z.stride(1)) if z is not None else (0, 0))
     # We don't want autotune since it will overwrite the state
     # We instead tune by hand.
