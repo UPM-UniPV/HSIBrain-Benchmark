@@ -12,6 +12,7 @@ from sklearn.metrics import (cohen_kappa_score, confusion_matrix, f1_score,
 
 import utils.tools as tools
 
+import time
 
 def calc_auc(true_labels, pred_labels):
     """ AUC """
@@ -205,6 +206,9 @@ def test_evaluate(data_loader, model, device, args):
     model.eval()
     test_preds = []
     test_labels = []
+
+    start_time = time.time()
+
     for _, (samples, targets) in enumerate(data_loader, 0):
         samples = samples.to(dtype=torch.float32,
                              device=device, non_blocking=True)
@@ -228,6 +232,9 @@ def test_evaluate(data_loader, model, device, args):
         test_preds = tools.gather_tensor(test_preds)
         test_labels = tools.gather_tensor(test_labels)
 
+    end_time = time.time()
+    inference_time = end_time - start_time
+
     # remove background
     mask = (test_labels != 0)
     test_preds_noback = test_preds[mask]
@@ -237,4 +244,4 @@ def test_evaluate(data_loader, model, device, args):
     kappa_score, precision, recall, f1, accuracy, roc_auc, cm, per_class_accuracy, precision_class, recall_class, fscore_class, roc_per_class, support = calculate_test_metrics(
         test_preds_noback, test_labels)
 
-    return torch.softmax(test_preds, dim=1), {"kappa_score": kappa_score, "precision": precision, "recall": recall, "f1score": f1, "oacc": accuracy, "rocauc": roc_auc, "cm": cm, "per_class_accuracy": per_class_accuracy, "precision_class": precision_class, "recall_class": recall_class, "fscore_class": fscore_class, "roc_class": roc_per_class, "support": support}
+    return torch.softmax(test_preds, dim=1), {"kappa_score": kappa_score, "precision": precision, "recall": recall, "f1score": f1, "oacc": accuracy, "rocauc": roc_auc, "cm": cm, "per_class_accuracy": per_class_accuracy, "precision_class": precision_class, "recall_class": recall_class, "fscore_class": fscore_class, "roc_class": roc_per_class, "support": support, "inference_time": inference_time}
