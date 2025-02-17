@@ -3,7 +3,7 @@ einops==0.8.0
 kornia==0.7.3
 mamba_ssm==1.2.2
 matplotlib==3.9.2
-mlflow==2.16.2
+mlflow==2.20.2
 mlflow_skinny==2.16.2
 numpy==2.2.3
 opencv_python_headless==4.10.0.84
