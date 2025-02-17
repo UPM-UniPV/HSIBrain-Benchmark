@@ -12,6 +12,7 @@ class DistillationLoss(torch.nn.Module):
     This module wraps a standard criterion and adds an extra knowledge distillation loss by
     taking a teacher model prediction and using it as additional supervision.
     """
+
     def __init__(self, base_criterion: torch.nn.Module, teacher_model: torch.nn.Module,
                  distillation_type: str, alpha: float, tau: float):
         super().__init__()
@@ -53,18 +54,21 @@ class DistillationLoss(torch.nn.Module):
             # with slight modifications
             distillation_loss = F.kl_div(
                 F.log_softmax(outputs_kd / T, dim=1),
-                #We provide the teacher's targets in log probability because we use log_target=True 
-                #(as recommended in pytorch https://github.com/pytorch/pytorch/blob/9324181d0ac7b4f7949a574dbc3e8be30abe7041/torch/nn/functional.py#L2719)
-                #but it is possible to give just the probabilities and set log_target=False. In our experiments we tried both.
+                # We provide the teacher's targets in log probability because we use log_target=True
+                # (as recommended in pytorch https://github.com/pytorch/pytorch/blob/9324181d0ac7b4f7949a574dbc3e8be30abe7041/torch/nn/functional.py#L2719)
+                # but it is possible to give just the probabilities and set
+                # log_target=False. In our experiments we tried both.
                 F.log_softmax(teacher_outputs / T, dim=1),
                 reduction='sum',
                 log_target=True
             ) * (T * T) / outputs_kd.numel()
-            #We divide by outputs_kd.numel() to have the legacy PyTorch behavior. 
-            #But we also experiments output_kd.size(0) 
-            #see issue 61(https://github.com/facebookresearch/deit/issues/61) for more details
+            # We divide by outputs_kd.numel() to have the legacy PyTorch behavior.
+            # But we also experiments output_kd.size(0)
+            # see issue 61(https://github.com/facebookresearch/deit/issues/61)
+            # for more details
         elif self.distillation_type == 'hard':
-            distillation_loss = F.cross_entropy(outputs_kd, teacher_outputs.argmax(dim=1))
+            distillation_loss = F.cross_entropy(
+                outputs_kd, teacher_outputs.argmax(dim=1))
 
         loss = base_loss * (1 - self.alpha) + distillation_loss * self.alpha
         return loss

@@ -7,13 +7,12 @@ import math
 import sys
 from typing import Iterable, Optional
 
-import torch
-
 import timm
-from timm.data import Mixup
-from timm.utils import accuracy, ModelEma
-
+import torch
 from losses import DistillationLoss
+from timm.data import Mixup
+from timm.utils import ModelEma, accuracy
+
 import utils.tools as tools
 
 
@@ -21,19 +20,22 @@ def train_one_epoch(model: torch.nn.Module, criterion: DistillationLoss,
                     data_loader: Iterable, optimizer: torch.optim.Optimizer,
                     device: torch.device, epoch: int, loss_scaler, amp_autocast, max_norm: float = 0,
                     model_ema: Optional[ModelEma] = None, mixup_fn: Optional[Mixup] = None,
-                    set_training_mode=True, args = None):
+                    set_training_mode=True, args=None):
     model.train(set_training_mode)
     metric_logger = tools.MetricLogger(delimiter="  ")
-    metric_logger.add_meter('lr', tools.SmoothedValue(window_size=1, fmt='{value:.6f}'))
+    metric_logger.add_meter(
+        'lr', tools.SmoothedValue(
+            window_size=1, fmt='{value:.6f}'))
     header = 'Epoch: [{}]'.format(epoch)
     print_freq = 10
-    
+
     if args.cosub:
         criterion = torch.nn.BCEWithLogitsLoss()
-        
+
     # debug
     # count = 0
-    for samples, targets in metric_logger.log_every(data_loader, print_freq, header):
+    for samples, targets in metric_logger.log_every(
+            data_loader, print_freq, header):
         # count += 1
         # if count > 20:
         #     break
@@ -43,24 +45,29 @@ def train_one_epoch(model: torch.nn.Module, criterion: DistillationLoss,
 
         if mixup_fn is not None:
             samples, targets = mixup_fn(samples, targets)
-            
+
         if args.cosub:
-            samples = torch.cat((samples,samples),dim=0)
-            
+            samples = torch.cat((samples, samples), dim=0)
+
         if args.bce_loss:
             targets = targets.gt(0.0).type(targets.dtype)
-         
+
         with amp_autocast():
-            outputs = model(samples, if_random_cls_token_position=args.if_random_cls_token_position, if_random_token_rank=args.if_random_token_rank)
+            outputs = model(
+                samples,
+                if_random_cls_token_position=args.if_random_cls_token_position,
+                if_random_token_rank=args.if_random_token_rank)
             # outputs = model(samples)
             if not args.cosub:
                 loss = criterion(samples, outputs, targets)
             else:
-                outputs = torch.split(outputs, outputs.shape[0]//2, dim=0)
-                loss = 0.25 * criterion(outputs[0], targets) 
-                loss = loss + 0.25 * criterion(outputs[1], targets) 
-                loss = loss + 0.25 * criterion(outputs[0], outputs[1].detach().sigmoid())
-                loss = loss + 0.25 * criterion(outputs[1], outputs[0].detach().sigmoid()) 
+                outputs = torch.split(outputs, outputs.shape[0] // 2, dim=0)
+                loss = 0.25 * criterion(outputs[0], targets)
+                loss = loss + 0.25 * criterion(outputs[1], targets)
+                loss = loss + 0.25 * \
+                    criterion(outputs[0], outputs[1].detach().sigmoid())
+                loss = loss + 0.25 * \
+                    criterion(outputs[1], outputs[0].detach().sigmoid())
 
         if args.if_nan2num:
             with amp_autocast():
@@ -80,12 +87,13 @@ def train_one_epoch(model: torch.nn.Module, criterion: DistillationLoss,
 
         # this attribute is added by timm on one optimizer (adahessian)
         if isinstance(loss_scaler, timm.utils.NativeScaler):
-            is_second_order = hasattr(optimizer, 'is_second_order') and optimizer.is_second_order
+            is_second_order = hasattr(
+                optimizer, 'is_second_order') and optimizer.is_second_order
             loss_scaler(loss, optimizer, clip_grad=max_norm,
-                    parameters=model.parameters(), create_graph=is_second_order)
+                        parameters=model.parameters(), create_graph=is_second_order)
         else:
             loss.backward()
-            if max_norm != None:
+            if max_norm is not None:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
             optimizer.step()
 

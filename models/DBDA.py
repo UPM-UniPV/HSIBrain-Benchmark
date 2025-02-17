@@ -1,18 +1,13 @@
 import math
-import numpy as np
-import matplotlib.pyplot as plt
-from einops import rearrange, repeat
-
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
 
 
 class PAM_Module(nn.Module):
     """ Position attention module"""
-    #Ref from SAGAN
+    # Ref from SAGAN
+
     def __init__(self, in_dim):
         super(PAM_Module, self).__init__()
         self.chanel_in = in_dim
@@ -20,12 +15,22 @@ class PAM_Module(nn.Module):
         # self.query_conv = Conv3d(in_channels=in_dim, out_channels=in_dim//8, kernel_size=1)
         # self.key_conv = Conv3d(in_channels=in_dim, out_channels=in_dim//8, kernel_size=1)
         # self.value_conv = Conv3d(in_channels=in_dim, out_channels=in_dim, kernel_size=1)
-        self.query_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim // 8, kernel_size=1)
-        self.key_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim // 8, kernel_size=1)
-        self.value_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim, kernel_size=1)
+        self.query_conv = nn.Conv2d(
+            in_channels=in_dim,
+            out_channels=in_dim // 8,
+            kernel_size=1)
+        self.key_conv = nn.Conv2d(
+            in_channels=in_dim,
+            out_channels=in_dim // 8,
+            kernel_size=1)
+        self.value_conv = nn.Conv2d(
+            in_channels=in_dim,
+            out_channels=in_dim,
+            kernel_size=1)
         self.gamma = nn.Parameter(torch.zeros(1))
 
         self.softmax = nn.Softmax(dim=-1)
+
     def forward(self, x):
         """
             inputs :
@@ -50,7 +55,8 @@ class PAM_Module(nn.Module):
         # print('x', x.shape)
 
         m_batchsize, C, height, width = x.size()
-        proj_query = self.query_conv(x).view(m_batchsize, -1, width * height).permute(0, 2, 1)
+        proj_query = self.query_conv(x).view(
+            m_batchsize, -1, width * height).permute(0, 2, 1)
         proj_key = self.key_conv(x).view(m_batchsize, -1, width * height)
         energy = torch.bmm(proj_query, proj_key)
         attention = self.softmax(energy)
@@ -59,20 +65,21 @@ class PAM_Module(nn.Module):
         out = torch.bmm(proj_value, attention.permute(0, 2, 1))
         out = out.view(m_batchsize, C, height, width)
 
-        out = (self.gamma*out + x).unsqueeze(-1)
+        out = (self.gamma * out + x).unsqueeze(-1)
         return out
 
 
 class CAM_Module(nn.Module):
     """ Channel attention module"""
+
     def __init__(self, in_dim):
         super(CAM_Module, self).__init__()
         self.chanel_in = in_dim
 
-
         self.gamma = nn.Parameter(torch.zeros(1))
-        self.softmax  = nn.Softmax(dim=-1)
-    def forward(self,x):
+        self.softmax = nn.Softmax(dim=-1)
+
+    def forward(self, x):
         """
             inputs :
                 x : input feature maps( B X C X H X W)
@@ -81,11 +88,12 @@ class CAM_Module(nn.Module):
                 attention: B X C X C
         """
         m_batchsize, C, height, width, channle = x.size()
-        #print(x.size())
+        # print(x.size())
         proj_query = x.view(m_batchsize, C, -1)
-        proj_key = x.view(m_batchsize, C, -1).permute(0, 2, 1) #形状转换并交换维度
+        proj_key = x.view(m_batchsize, C, -1).permute(0, 2, 1)  # 形状转换并交换维度
         energy = torch.bmm(proj_query, proj_key)
-        energy_new = torch.max(energy, -1, keepdim=True)[0].expand_as(energy)-energy
+        energy_new = torch.max(
+            energy, -1, keepdim=True)[0].expand_as(energy) - energy
         attention = self.softmax(energy_new)
         proj_value = x.view(m_batchsize, C, -1)
 
@@ -94,7 +102,7 @@ class CAM_Module(nn.Module):
         # print('out', out.shape)
         # print('x', x.shape)
 
-        out = self.gamma*out + x  #C*H*W
+        out = self.gamma * out + x  # C*H*W
         return out
 
 
@@ -139,8 +147,8 @@ class DBDA(nn.Module):
         )
         kernel_3d = math.floor((band - 6) / 2)
         self.conv15 = nn.Conv3d(in_channels=60, out_channels=60,
-                                kernel_size=(1, 1, kernel_3d), stride=(1, 1, 1)) # kernel size随数据变化
-
+                                # kernel size随数据变化
+                                kernel_size=(1, 1, kernel_3d), stride=(1, 1, 1))
 
         # Spatial Branch
         self.conv21 = nn.Conv3d(in_channels=1, out_channels=24,
@@ -171,7 +179,6 @@ class DBDA(nn.Module):
         self.conv24 = nn.Conv3d(in_channels=48, out_channels=12, padding=(1, 1, 0),
                                 kernel_size=(3, 3, 1), stride=(1, 1, 1))
 
-
         self.conv25 = nn.Sequential(
                                 nn.Conv3d(in_channels=1, out_channels=1, padding=(1, 1, 0),
                                 kernel_size=(3, 3, 2), stride=(1, 1, 1)),
@@ -193,7 +200,6 @@ class DBDA(nn.Module):
                                     nn.Dropout(p=0.5)
         )
 
-
         self.global_pooling = nn.AdaptiveAvgPool3d(1)
         self.full_connection = nn.Sequential(
                                 #nn.Dropout(p=0.5),
@@ -204,26 +210,26 @@ class DBDA(nn.Module):
         self.attention_spectral = CAM_Module(60)
         self.attention_spatial = PAM_Module(60)
 
-        #fc = Dense(classes, activation='softmax', name='output1',
+        # fc = Dense(classes, activation='softmax', name='output1',
         #           kernel_initializer=RandomNormal(mean=0.0, stddev=0.01))
 
     def forward(self, X):
         X = X.unsqueeze(1)
 
-        X = torch.moveaxis(X, 2,4)
-        X = torch.moveaxis(X, 2,3)
+        X = torch.moveaxis(X, 2, 4)
+        X = torch.moveaxis(X, 2, 3)
         # spectral
         x11 = self.conv11(X)
-        #print('x11', x11.shape)
+        # print('x11', x11.shape)
         x12 = self.batch_norm11(x11)
         x12 = self.conv12(x12)
-        #print('x12', x12.shape)
+        # print('x12', x12.shape)
 
         x13 = torch.cat((x11, x12), dim=1)
-        #print('x13', x13.shape)
+        # print('x13', x13.shape)
         x13 = self.batch_norm12(x13)
         x13 = self.conv13(x13)
-        #print('x13', x13.shape)
+        # print('x13', x13.shape)
 
         x14 = torch.cat((x11, x12, x13), dim=1)
         x14 = self.batch_norm13(x14)
@@ -234,16 +240,15 @@ class DBDA(nn.Module):
 
         x16 = self.batch_norm14(x15)
         x16 = self.conv15(x16)
-        #print('x16', x16.shape)  # 7*7*97, 60
+        # print('x16', x16.shape)  # 7*7*97, 60
 
-        #print('x16', x16.shape)
+        # print('x16', x16.shape)
         # 光谱注意力通道
         x1 = self.attention_spectral(x16)
         x1 = torch.mul(x1, x16)
 
-
         # spatial
-        #print('x', X.shape)
+        # print('x', X.shape)
         x21 = self.conv21(X)
         x22 = self.batch_norm21(x21)
         x22 = self.conv22(x22)
@@ -257,9 +262,9 @@ class DBDA(nn.Module):
         x24 = self.conv24(x24)
 
         x25 = torch.cat((x21, x22, x23, x24), dim=1)
-        #print('x25', x25.shape)
+        # print('x25', x25.shape)
         # x25 = x25.permute(0, 4, 2, 3, 1)
-        #print('x25', x25.shape)
+        # print('x25', x25.shape)
 
         # 空间注意力机制
         x2 = self.attention_spatial(x25)
@@ -270,11 +275,11 @@ class DBDA(nn.Module):
         x1 = self.global_pooling(x1)
         x1 = x1.squeeze(-1).squeeze(-1).squeeze(-1)
         x2 = self.batch_norm_spatial(x2)
-        x2= self.global_pooling(x2)
+        x2 = self.global_pooling(x2)
         x2 = x2.squeeze(-1).squeeze(-1).squeeze(-1)
 
         x_pre = torch.cat((x1, x2), dim=1)
-        #print('x_pre', x_pre.shape)
+        # print('x_pre', x_pre.shape)
 
         # model2
         # x1 = torch.mul(x2, x16)

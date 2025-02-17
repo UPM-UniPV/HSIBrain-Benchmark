@@ -4,7 +4,8 @@ import torch.nn.functional as F
 
 
 class NonLocalDot(nn.Module):
-    def __init__(self, in_channels, depth, embed=True, softmax=True, maxpool=False):
+    def __init__(self, in_channels, depth, embed=True,
+                 softmax=True, maxpool=False):
         """
         Implementation of the non-local block in PyTorch.
 
@@ -30,8 +31,8 @@ class NonLocalDot(nn.Module):
 
         self.out_conv = nn.Conv2d(depth, in_channels, kernel_size=1, stride=1)
         self.out_bn = nn.BatchNorm2d(in_channels)
-        nn.init.constant_(self.out_bn.weight, 0)  # Zero-init as described in Sec. 4.1
-
+        # Zero-init as described in Sec. 4.1
+        nn.init.constant_(self.out_bn.weight, 0)
 
     def forward(self, X):
         """
@@ -60,8 +61,10 @@ class NonLocalDot(nn.Module):
 
         # Flatten
         a_flat = a.view(batch_size, -1, height * width)  # [B, depth, HW]
-        b_flat = b.view(batch_size, -1, b.size(2) * b.size(3))  # [B, depth, HW]
-        g_flat = g.view(batch_size, -1, g.size(2) * g.size(3))  # [B, depth, HW]
+        b_flat = b.view(batch_size, -1, b.size(2) *
+                        b.size(3))  # [B, depth, HW]
+        g_flat = g.view(batch_size, -1, g.size(2) *
+                        g.size(3))  # [B, depth, HW]
 
         # Compute f(a, b) -> [B, HW, HW]
         f = torch.bmm(a_flat.permute(0, 2, 1), b_flat)
@@ -72,13 +75,15 @@ class NonLocalDot(nn.Module):
 
         # Compute f * g -> [B, HW, depth]
         fg = torch.bmm(f, g_flat.permute(0, 2, 1))
-        fg = fg.permute(0, 2, 1).contiguous().view(batch_size, -1, height, width)
+        fg = fg.permute(
+            0, 2, 1).contiguous().view(
+            batch_size, -1, height, width)
 
         # Residual connection and final batch norm
         fg = self.out_conv(fg)
         fg = self.out_bn(fg)
         return X + fg
-    
+
 
 # Define the network
 class SSAN(nn.Module):
@@ -89,8 +94,16 @@ class SSAN(nn.Module):
         self.n_classes = n_classes
 
         # Spectral feature learning
-        self.conv3d_1 = nn.Conv3d(1, 32, kernel_size=(7, 1, 1), stride=(1, 1, 1), padding=(3, 0, 0))
-        self.conv3d_2 = nn.Conv3d(32, 32, kernel_size=(7, 1, 1), stride=(1, 1, 1), padding=(3, 0, 0))
+        self.conv3d_1 = nn.Conv3d(
+            1, 32, kernel_size=(
+                7, 1, 1), stride=(
+                1, 1, 1), padding=(
+                3, 0, 0))
+        self.conv3d_2 = nn.Conv3d(
+            32, 32, kernel_size=(
+                7, 1, 1), stride=(
+                1, 1, 1), padding=(
+                3, 0, 0))
 
         # Spatial feature learning
         self.nonlocal_1 = NonLocalDot(32 * num_band, 64)
@@ -108,15 +121,20 @@ class SSAN(nn.Module):
 
     def forward(self, x):
         # Spectral feature learning
-        # x = x.permute(0, 3, 1, 2)  # Transpose to [batch, num_band, patch_size, patch_size]
-        x = x.unsqueeze(1)         # Add channel dimension [batch, 1, num_band, patch_size, patch_size]
+        # x = x.permute(0, 3, 1, 2)  # Transpose to [batch, num_band,
+        # patch_size, patch_size]
+        # Add channel dimension [batch, 1, num_band, patch_size, patch_size]
+        x = x.unsqueeze(1)
         x1 = F.relu(self.conv3d_1(x))
         x2 = F.relu(self.conv3d_2(x1))
 
         # Spatial feature learning
-        x3 = x2.permute(0, 3, 4, 1, 2)  # Transpose to [batch, patch_size, patch_size, num_band, 32]
-        x3 = x3.reshape(-1, self.patch_size, self.patch_size, 32 * self.num_band)  # Flatten the spectral dimension
-        x3 = self.nonlocal_1(x3.permute(0, 3, 1, 2))  # Non-local layer, permute to [batch, channels, height, width]
+        # Transpose to [batch, patch_size, patch_size, num_band, 32]
+        x3 = x2.permute(0, 3, 4, 1, 2)
+        x3 = x3.reshape(-1, self.patch_size, self.patch_size,
+                        32 * self.num_band)  # Flatten the spectral dimension
+        # Non-local layer, permute to [batch, channels, height, width]
+        x3 = self.nonlocal_1(x3.permute(0, 3, 1, 2))
         x4 = F.relu(self.conv2d_1(x3))
 
         x4 = self.nonlocal_2(x4)

@@ -1,21 +1,18 @@
 import math
-from functools import partial
-from typing import Optional, Callable
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
 from einops import rearrange, repeat
-from timm.models.layers import DropPath, to_2tuple
+
 try:
     from mamba_ssm.ops.selective_scan_interface import selective_scan_fn
-except:
+except BaseException:
     pass
 
 
-
-def flops_selective_scan_ref(B=1, L=256, D=768, N=16, with_D=True, with_Z=False, with_Group=True, with_complex=False):
+def flops_selective_scan_ref(B=1, L=256, D=768, N=16, with_D=True,
+                             with_Z=False, with_Group=True, with_complex=False):
     """
     u: r(B D L)
     delta: r(B D L)
@@ -37,14 +34,14 @@ def flops_selective_scan_ref(B=1, L=256, D=768, N=16, with_D=True, with_Z=False,
         optim = np.einsum_path(equation, *np_arrs, optimize="optimal")[1]
         for line in optim.split("\n"):
             if "optimized flop" in line.lower():
-                # divided by 2 because we count MAC (multiply-add counted as one flop)
+                # divided by 2 because we count MAC (multiply-add counted as
+                # one flop)
                 flop = float(np.floor(float(line.split(":")[-1]) / 2))
                 return flop
 
-
     assert not with_complex
 
-    flops = 0 # below code flops = 0
+    flops = 0  # below code flops = 0
     if False:
         ...
         """
@@ -72,9 +69,11 @@ def flops_selective_scan_ref(B=1, L=256, D=768, N=16, with_D=True, with_Z=False,
 
     flops += get_flops_einsum([[B, D, L], [D, N]], "bdl,dn->bdln")
     if with_Group:
-        flops += get_flops_einsum([[B, D, L], [B, N, L], [B, D, L]], "bdl,bnl,bdl->bdln")
+        flops += get_flops_einsum([[B, D, L], [B, N, L],
+                                  [B, D, L]], "bdl,bnl,bdl->bdln")
     else:
-        flops += get_flops_einsum([[B, D, L], [B, D, N, L], [B, D, L]], "bdl,bdnl,bdl->bdln")
+        flops += get_flops_einsum([[B, D, L], [B, D, N, L],
+                                  [B, D, L]], "bdl,bdnl,bdl->bdln")
     if False:
         ...
         """
@@ -133,6 +132,7 @@ def flops_selective_scan_ref(B=1, L=256, D=768, N=16, with_D=True, with_Z=False,
 
     return flops
 
+
 class SSM(nn.Module):
     def __init__(
             self,
@@ -147,24 +147,35 @@ class SSM(nn.Module):
             dt_init="random",
             dt_scale=1.0,
             dt_init_floor=1e-4,
-            bias = False,
-            gaussian = False,
+            bias=False,
+            gaussian=False,
             # ======================
             **kwargs,
     ):
         factory_kwargs = {"device": None, "dtype": None}
         super().__init__()
         self.d_model = d_model
-        self.d_state = math.ceil(self.d_model / 6) if d_state == "auto" else d_state  # 20240109
+        self.d_state = math.ceil(
+            self.d_model /
+            6) if d_state == "auto" else d_state  # 20240109
         self.expand = ssm_ratio
         self.d_inner = int(self.expand * self.d_model)
-        self.dt_rank = math.ceil(self.d_model / 16) if dt_rank == "auto" else dt_rank
+        self.dt_rank = math.ceil(
+            self.d_model /
+            16) if dt_rank == "auto" else dt_rank
 
-
-        self.in_proj = nn.Linear(self.d_model, self.d_inner * 2, bias=bias, **factory_kwargs)
+        self.in_proj = nn.Linear(
+            self.d_model,
+            self.d_inner * 2,
+            bias=bias,
+            **factory_kwargs)
 
         # x proj; dt proj ============================
-        self.x_proj = nn.Linear(self.d_inner, (self.dt_rank + self.d_state * 2), bias=False, **factory_kwargs)
+        self.x_proj = nn.Linear(
+            self.d_inner,
+            (self.dt_rank + self.d_state * 2),
+            bias=False,
+            **factory_kwargs)
 
         self.dt_proj = self.dt_init(self.dt_rank, self.d_inner, dt_scale, dt_init, dt_min, dt_max, dt_init_floor,
                                     **factory_kwargs)
@@ -173,20 +184,23 @@ class SSM(nn.Module):
         self.A_log = self.A_log_init(self.d_state, self.d_inner)  # (D, N)
         self.D = self.D_init(self.d_inner)  # (D)
 
-
         self.selective_scan = selective_scan_fn
-
 
         # out norm ===================================
         self.out_norm = nn.LayerNorm(self.d_inner)
-        self.out_proj = nn.Linear(self.d_inner, self.d_model, bias=bias, **factory_kwargs)
+        self.out_proj = nn.Linear(
+            self.d_inner,
+            self.d_model,
+            bias=bias,
+            **factory_kwargs)
 
     @staticmethod
     def dt_init(dt_rank, d_inner, dt_scale=1.0, dt_init="random", dt_min=0.001, dt_max=0.1, dt_init_floor=1e-4,
                 **factory_kwargs):
         dt_proj = nn.Linear(dt_rank, d_inner, bias=True, **factory_kwargs)
 
-        # Initialize special dt projection to preserve variance at initialization
+        # Initialize special dt projection to preserve variance at
+        # initialization
         dt_init_std = dt_rank ** -0.5 * dt_scale
         if dt_init == "constant":
             nn.init.constant_(dt_proj.weight, dt_init_std)
@@ -195,9 +209,11 @@ class SSM(nn.Module):
         else:
             raise NotImplementedError
 
-        # Initialize dt bias so that F.softplus(dt_bias) is between dt_min and dt_max
+        # Initialize dt bias so that F.softplus(dt_bias) is between dt_min and
+        # dt_max
         dt = torch.exp(
-            torch.rand(d_inner, **factory_kwargs) * (math.log(dt_max) - math.log(dt_min))
+            torch.rand(d_inner, **factory_kwargs) *
+            (math.log(dt_max) - math.log(dt_min))
             + math.log(dt_min)
         ).clamp(min=dt_init_floor)
         # Inverse of softplus: https://github.com/pytorch/pytorch/issues/72759
@@ -241,10 +257,11 @@ class SSM(nn.Module):
     def forward_core(self, x: torch.Tensor):
         B, L, d = x.shape
         x = x.permute(0, 2, 1)
-        
-        
+
         x_dbl = self.x_proj(rearrange(x, "b d l -> (b l) d"))  # (bl d)
-        dt, B, C = torch.split(x_dbl, [self.dt_rank, self.d_state, self.d_state], dim=-1)
+        dt, B, C = torch.split(
+            x_dbl, [
+                self.dt_rank, self.d_state, self.d_state], dim=-1)
         dt = self.dt_proj.weight @ dt.t()
         dt = rearrange(dt, "d (b l) -> b d l", l=L)
         A = -torch.exp(self.A_log.float())  # (k * d, d_state)
@@ -272,6 +289,3 @@ class SSM(nn.Module):
         out = self.out_proj(y)
 
         return out
-
-
-

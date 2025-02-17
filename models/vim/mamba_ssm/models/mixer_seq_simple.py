@@ -1,17 +1,16 @@
 # Copyright (c) 2023, Albert Gu, Tri Dao.
 
-import math
-from functools import partial
 import json
+import math
 import os
-
 from collections import namedtuple
+from functools import partial
 
 import torch
 import torch.nn as nn
 
 from models.vim.mamba_ssm.models.config_mamba import MambaConfig
-from models.vim.mamba_ssm.modules.mamba_simple import Mamba, Block
+from models.vim.mamba_ssm.modules.mamba_simple import Block, Mamba
 from models.vim.mamba_ssm.utils.generation import GenerationMixin
 from models.vim.mamba_ssm.utils.hf import load_config_hf, load_state_dict_hf
 
@@ -35,7 +34,11 @@ def create_block(
     if ssm_cfg is None:
         ssm_cfg = {}
     factory_kwargs = {"device": device, "dtype": dtype}
-    mixer_cls = partial(Mamba, layer_idx=layer_idx, **ssm_cfg, **factory_kwargs)
+    mixer_cls = partial(
+        Mamba,
+        layer_idx=layer_idx,
+        **ssm_cfg,
+        **factory_kwargs)
     norm_cls = partial(
         nn.LayerNorm if not rms_norm else RMSNorm, eps=norm_epsilon, **factory_kwargs
     )
@@ -71,7 +74,8 @@ def _init_weights(
         #   > the weights of residual layers at initialization by a factor of 1/√N where N is the # of residual layers.
         #   >   -- GPT-2 :: https://openai.com/blog/better-language-models/
         #
-        # Reference (Megatron-LM): https://github.com/NVIDIA/Megatron-LM/blob/main/megatron/model/gpt_model.py
+        # Reference (Megatron-LM):
+        # https://github.com/NVIDIA/Megatron-LM/blob/main/megatron/model/gpt_model.py
         for name, p in module.named_parameters():
             if name in ["out_proj.weight", "fc2.weight"]:
                 # Special Scaled Initialization --> There are 2 Layer Norms per Transformer Block
@@ -112,7 +116,8 @@ class MixerModel(nn.Module):
         self.fused_add_norm = fused_add_norm
         if self.fused_add_norm:
             if layer_norm_fn is None or rms_norm_fn is None:
-                raise ImportError("Failed to import Triton LayerNorm / RMSNorm kernels")
+                raise ImportError(
+                    "Failed to import Triton LayerNorm / RMSNorm kernels")
 
         self.layers = nn.ModuleList(
             [
@@ -142,9 +147,11 @@ class MixerModel(nn.Module):
             )
         )
 
-    def allocate_inference_cache(self, batch_size, max_seqlen, dtype=None, **kwargs):
+    def allocate_inference_cache(
+            self, batch_size, max_seqlen, dtype=None, **kwargs):
         return {
-            i: layer.allocate_inference_cache(batch_size, max_seqlen, dtype=dtype, **kwargs)
+            i: layer.allocate_inference_cache(
+                batch_size, max_seqlen, dtype=dtype, **kwargs)
             for i, layer in enumerate(self.layers)
         }
 
@@ -156,11 +163,15 @@ class MixerModel(nn.Module):
                 hidden_states, residual, inference_params=inference_params
             )
         if not self.fused_add_norm:
-            residual = (hidden_states + residual) if residual is not None else hidden_states
-            hidden_states = self.norm_f(residual.to(dtype=self.norm_f.weight.dtype))
+            residual = (
+                hidden_states +
+                residual) if residual is not None else hidden_states
+            hidden_states = self.norm_f(
+                residual.to(dtype=self.norm_f.weight.dtype))
         else:
             # Set prenorm=False here since we don't need the residual
-            fused_add_norm_fn = rms_norm_fn if isinstance(self.norm_f, RMSNorm) else layer_norm_fn
+            fused_add_norm_fn = rms_norm_fn if isinstance(
+                self.norm_f, RMSNorm) else layer_norm_fn
             hidden_states = fused_add_norm_fn(
                 hidden_states,
                 self.norm_f.weight,
@@ -195,7 +206,8 @@ class MambaLMHeadModel(nn.Module, GenerationMixin):
 
         super().__init__()
         if vocab_size % pad_vocab_size_multiple != 0:
-            vocab_size += pad_vocab_size_multiple - (vocab_size % pad_vocab_size_multiple)
+            vocab_size += pad_vocab_size_multiple - \
+                (vocab_size % pad_vocab_size_multiple)
         self.backbone = MixerModel(
             d_model=d_model,
             n_layer=n_layer,
@@ -207,7 +219,11 @@ class MambaLMHeadModel(nn.Module, GenerationMixin):
             residual_in_fp32=residual_in_fp32,
             **factory_kwargs,
         )
-        self.lm_head = nn.Linear(d_model, vocab_size, bias=False, **factory_kwargs)
+        self.lm_head = nn.Linear(
+            d_model,
+            vocab_size,
+            bias=False,
+            **factory_kwargs)
 
         # Initialize weights and apply final processing
         self.apply(
@@ -222,15 +238,19 @@ class MambaLMHeadModel(nn.Module, GenerationMixin):
     def tie_weights(self):
         self.lm_head.weight = self.backbone.embedding.weight
 
-    def allocate_inference_cache(self, batch_size, max_seqlen, dtype=None, **kwargs):
-        return self.backbone.allocate_inference_cache(batch_size, max_seqlen, dtype=dtype, **kwargs)
+    def allocate_inference_cache(
+            self, batch_size, max_seqlen, dtype=None, **kwargs):
+        return self.backbone.allocate_inference_cache(
+            batch_size, max_seqlen, dtype=dtype, **kwargs)
 
-    def forward(self, input_ids, position_ids=None, inference_params=None, num_last_tokens=0):
+    def forward(self, input_ids, position_ids=None,
+                inference_params=None, num_last_tokens=0):
         """
         "position_ids" is just to be compatible with Transformer generation. We don't use it.
         num_last_tokens: if > 0, only return the logits for the last n tokens
         """
-        hidden_states = self.backbone(input_ids, inference_params=inference_params)
+        hidden_states = self.backbone(
+            input_ids, inference_params=inference_params)
         if num_last_tokens > 0:
             hidden_states = hidden_states[:, -num_last_tokens:]
         lm_logits = self.lm_head(hidden_states)
@@ -238,11 +258,16 @@ class MambaLMHeadModel(nn.Module, GenerationMixin):
         return CausalLMOutput(logits=lm_logits)
 
     @classmethod
-    def from_pretrained(cls, pretrained_model_name, device=None, dtype=None, **kwargs):
+    def from_pretrained(cls, pretrained_model_name,
+                        device=None, dtype=None, **kwargs):
         config_data = load_config_hf(pretrained_model_name)
         config = MambaConfig(**config_data)
         model = cls(config, device=device, dtype=dtype, **kwargs)
-        model.load_state_dict(load_state_dict_hf(pretrained_model_name, device=device, dtype=dtype))
+        model.load_state_dict(
+            load_state_dict_hf(
+                pretrained_model_name,
+                device=device,
+                dtype=dtype))
         return model
 
     def save_pretrained(self, save_directory):

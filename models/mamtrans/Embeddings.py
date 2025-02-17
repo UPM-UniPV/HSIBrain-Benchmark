@@ -1,9 +1,5 @@
-import einops
 import torch
-import math
 import torch.nn as nn
-import numpy as np
-from torch.autograd import Variable
 from einops.layers.torch import Rearrange
 
 

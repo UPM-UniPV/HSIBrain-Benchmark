@@ -1,12 +1,13 @@
 import torch
 
+
 class LARC(object):
     """
     :class:`LARC` is a pytorch implementation of both the scaling and clipping variants of LARC,
-    in which the ratio between gradient and parameter magnitudes is used to calculate an adaptive 
+    in which the ratio between gradient and parameter magnitudes is used to calculate an adaptive
     local learning rate for each individual parameter. The algorithm is designed to improve
     convergence of large batch training.
-     
+
     See https://arxiv.org/abs/1708.03888 for calculation of the local learning rate.
 
     In practice it modifies the gradients of parameters as a proxy for modifying the learning rate
@@ -60,7 +61,7 @@ class LARC(object):
     @param_groups.setter
     def param_groups(self, value):
         self.optim.param_groups = value
-    
+
     def state_dict(self):
         return self.optim.state_dict()
 
@@ -71,7 +72,7 @@ class LARC(object):
         self.optim.zero_grad()
 
     def add_param_group(self, param_group):
-        self.optim.add_param_group( param_group)
+        self.optim.add_param_group(param_group)
 
     def step(self):
         with torch.no_grad():
@@ -89,12 +90,15 @@ class LARC(object):
 
                     if param_norm != 0 and grad_norm != 0:
                         # calculate adaptive lr + weight decay
-                        adaptive_lr = self.trust_coefficient * (param_norm) / (grad_norm + param_norm * weight_decay + self.eps)
+                        adaptive_lr = self.trust_coefficient * \
+                            (param_norm) / (grad_norm +
+                                            param_norm * weight_decay + self.eps)
 
                         # clip learning rate for LARC
                         if self.clip:
-                            # calculation of adaptive_lr so that when multiplied by lr it equals `min(adaptive_lr, lr)`
-                            adaptive_lr = min(adaptive_lr/group['lr'], 1)
+                            # calculation of adaptive_lr so that when
+                            # multiplied by lr it equals `min(adaptive_lr, lr)`
+                            adaptive_lr = min(adaptive_lr / group['lr'], 1)
 
                         p.grad.data += weight_decay * p.data
                         p.grad.data *= adaptive_lr

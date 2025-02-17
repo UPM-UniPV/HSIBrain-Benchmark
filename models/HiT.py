@@ -1,20 +1,17 @@
 import torch
 import torch.nn as nn
-
+import torch.nn.functional as F
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.models.layers import DropPath, trunc_normal_
-from timm.models.registry import register_model
-import torch.nn.functional as F
-import math
-from torch.nn.modules.utils import _triple
+
 
 class attention3d(nn.Module):
     def __init__(self, in_planes, ratios, K, temperature):
         super(attention3d, self).__init__()
-        assert temperature%3==1
+        assert temperature % 3 == 1
         self.avgpool = nn.AdaptiveAvgPool3d(1)
         if in_planes != 3:
-            hidden_planes = int(in_planes * 4)+1
+            hidden_planes = int(in_planes * 4) + 1
         else:
             hidden_planes = K
         self.fc1 = nn.Conv3d(in_planes, hidden_planes, 1, bias=False)
@@ -22,8 +19,8 @@ class attention3d(nn.Module):
         self.temperature = temperature
 
     def updata_temperature(self):
-        if self.temperature!=1:
-            self.temperature -=3
+        if self.temperature != 1:
+            self.temperature -= 3
             print('Change temperature to:', str(self.temperature))
 
     def forward(self, x):
@@ -33,11 +30,10 @@ class attention3d(nn.Module):
         x = self.fc2(x).view(x.size(0), -1)
         return F.softmax(x / self.temperature, 1)
 
+
 class nattention3d(nn.Module):
     def __init__(self, in_planes):
         super(nattention3d, self).__init__()
-        bn_eps = 1e-3
-        bn_mmt = 0.01
         self.avgpool = nn.AdaptiveAvgPool3d((None, 1, 1))
         k = in_planes * 4
         self.a = nn.Conv3d(
@@ -59,6 +55,7 @@ class nattention3d(nn.Module):
         self.b.skip_init = True
         self.b.weight.data.zero_()  # to make sure the initial values
         # for the output is 1.
+
     def forward(self, x):
         y = x
         x = self.avgpool(x)
@@ -72,9 +69,10 @@ class nattention3d(nn.Module):
 
 
 class Dynamic_conv3d(nn.Module):
-    def __init__(self, in_planes, out_planes, kernel_size, ratio=0.25, stride=1, padding=0, dilation=1, groups=1, bias=False, K=4, temperature=4):
+    def __init__(self, in_planes, out_planes, kernel_size, ratio=0.25, stride=1,
+                 padding=0, dilation=1, groups=1, bias=False, K=4, temperature=4):
         super(Dynamic_conv3d, self).__init__()
-        assert in_planes%groups==0
+        assert in_planes % groups == 0
         self.in_planes = in_planes
         self.out_planes = out_planes
         self.kernel_size = kernel_size
@@ -87,7 +85,15 @@ class Dynamic_conv3d(nn.Module):
         self.attention = attention3d(in_planes, ratio, K, temperature)
         self.local = nattention3d(in_planes)
 
-        self.weight = nn.Parameter(torch.randn(K, out_planes, in_planes//groups, kernel_size[0], kernel_size[1], kernel_size[2]), requires_grad=True)
+        self.weight = nn.Parameter(
+            torch.randn(
+                K,
+                out_planes,
+                in_planes // groups,
+                kernel_size[0],
+                kernel_size[1],
+                kernel_size[2]),
+            requires_grad=True)
         if bias:
             self.bias = nn.Parameter(torch.Tensor(K, out_planes))
         else:
@@ -104,16 +110,25 @@ class Dynamic_conv3d(nn.Module):
         y = y.view(1, -1, depth, height, width)
         weight = self.weight.view(self.K, -1)
 
-        aggregate_weight = torch.mm(softmax_attention, weight).view(-1, self.in_planes, self.kernel_size[0], self.kernel_size[1], self.kernel_size[2])
+        aggregate_weight = torch.mm(softmax_attention,
+                                    weight).view(-1,
+                                                 self.in_planes,
+                                                 self.kernel_size[0],
+                                                 self.kernel_size[1],
+                                                 self.kernel_size[2])
         if self.bias is not None:
             aggregate_bias = torch.mm(softmax_attention, self.bias).view(-1)
             output = F.conv3d(y, weight=aggregate_weight, bias=aggregate_bias, stride=self.stride, padding=self.padding,
-                              dilation=self.dilation, groups=self.groups*batch_size)
+                              dilation=self.dilation, groups=self.groups * batch_size)
         else:
             output = F.conv3d(y, weight=aggregate_weight, bias=None, stride=self.stride, padding=self.padding,
                               dilation=self.dilation, groups=self.groups * batch_size)
 
-        output = output.view(batch_size, self.out_planes, output.size(-3), output.size(-2), output.size(-1))
+        output = output.view(batch_size,
+                             self.out_planes,
+                             output.size(-3),
+                             output.size(-2),
+                             output.size(-1))
         return output
 
 
@@ -135,7 +150,8 @@ default_cfgs = {
 
 
 class Mlp(nn.Module):
-    def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
+    def __init__(self, in_features, hidden_features=None,
+                 out_features=None, act_layer=nn.GELU, drop=0.):
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
@@ -145,7 +161,7 @@ class Mlp(nn.Module):
         self.drop = nn.Dropout(drop)
 
     def forward(self, x):
-        #print(x.shape)
+        # print(x.shape)
         x = self.fc1(x)
         x = self.act(x)
         x = self.drop(x)
@@ -155,7 +171,8 @@ class Mlp(nn.Module):
 
 
 class WeightedPermuteMLP(nn.Module):
-    def __init__(self, dim, segment_dim=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0.):
+    def __init__(self, dim, segment_dim=8, qkv_bias=False,
+                 qk_scale=None, attn_drop=0., proj_drop=0.):
         super().__init__()
         self.segment_dim = segment_dim
 
@@ -190,11 +207,13 @@ class WeightedPermuteMLP(nn.Module):
 
         return x
 
+
 class ConvPermuteMLP(nn.Module):
-    def __init__(self, dim, segment_dim=8, qkv_bias=True, qk_scale=None, attn_drop=0., proj_drop=0.):
+    def __init__(self, dim, segment_dim=8, qkv_bias=True,
+                 qk_scale=None, attn_drop=0., proj_drop=0.):
         super().__init__()
         self.segment_dim = segment_dim
-        #self.conv = nn.Conv2d(dim, dim, kernel_size=1, bias=qkv_bias)
+        # self.conv = nn.Conv2d(dim, dim, kernel_size=1, bias=qkv_bias)
 
         self.mlp_c = nn.Sequential(
             nn.Conv2d(dim, dim, kernel_size=(1, 3), stride=1, padding=(0, 1), dilation=1, groups=dim, bias=qkv_bias),
@@ -209,7 +228,7 @@ class ConvPermuteMLP(nn.Module):
         self.reweight = Mlp(dim, dim // 4, dim * 3)
 
         self.proj = nn.Linear(dim, dim)
-        #self.proj = nn.Conv2d(dim, dim, kernel_size=1, bias=qkv_bias)
+        # self.proj = nn.Conv2d(dim, dim, kernel_size=1, bias=qkv_bias)
         self.proj_drop = nn.Dropout(proj_drop)
 
     def forward(self, x):
@@ -225,11 +244,12 @@ class ConvPermuteMLP(nn.Module):
         a = self.reweight(a).reshape(B, C, 3).permute(2, 0, 1).softmax(dim=0).unsqueeze(2).unsqueeze(2).permute(0, 1, 4, 2, 3)
 
         x = h * a[0] + w * a[1] + c * a[2]
-        x = x.reshape(B, H, W, C)  
+        x = x.reshape(B, H, W, C)
         x = self.proj(x)
         x = self.proj_drop(x)
 
         return x
+
 
 class PermutatorBlock(nn.Module):
 
@@ -237,14 +257,24 @@ class PermutatorBlock(nn.Module):
                  drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm, skip_lam=1.0, mlp_fn=ConvPermuteMLP):
         super().__init__()
         self.norm1 = norm_layer(dim)
-        self.attn = mlp_fn(dim, segment_dim=segment_dim, qkv_bias=qkv_bias, qk_scale=None, attn_drop=attn_drop)
+        self.attn = mlp_fn(
+            dim,
+            segment_dim=segment_dim,
+            qkv_bias=qkv_bias,
+            qk_scale=None,
+            attn_drop=attn_drop)
 
-        # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
-        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        # NOTE: drop path for stochastic depth, we shall see if this is better
+        # than dropout here
+        self.drop_path = DropPath(
+            drop_path) if drop_path > 0. else nn.Identity()
 
         self.norm2 = norm_layer(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
-        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer)
+        self.mlp = Mlp(
+            in_features=dim,
+            hidden_features=mlp_hidden_dim,
+            act_layer=act_layer)
         self.skip_lam = skip_lam
 
     def forward(self, x):
@@ -258,7 +288,8 @@ class PatchEmbed(nn.Module):
     """ Image to Patch Embedding
     """
 
-    def __init__(self, img_size=15, patch_size=3, in_chans=3, embed_dim=16, large_features=False):
+    def __init__(self, img_size=15, patch_size=3, in_chans=3,
+                 embed_dim=16, large_features=False):
         super().__init__()
 
         if large_features:
@@ -272,7 +303,7 @@ class PatchEmbed(nn.Module):
         x = self.proj1_1(x)
         x = self.proj2_1(x)
         B, D, H, W, C = x.shape
-        x = x.reshape(B, D*H, W, C)
+        x = x.reshape(B, D * H, W, C)
         return x
 
 
@@ -282,7 +313,11 @@ class Downsample(nn.Module):
 
     def __init__(self, in_embed_dim, out_embed_dim, patch_size):
         super().__init__()
-        self.proj = nn.Conv2d(in_embed_dim, out_embed_dim, kernel_size=patch_size, stride=patch_size)
+        self.proj = nn.Conv2d(
+            in_embed_dim,
+            out_embed_dim,
+            kernel_size=patch_size,
+            stride=patch_size)
 
     def forward(self, x):
         x = x.permute(0, 3, 1, 2)
@@ -291,13 +326,14 @@ class Downsample(nn.Module):
         return x
 
 
-def basic_blocks(dim, index, layers, segment_dim, mlp_ratio=3., qkv_bias=True, qk_scale=None, \
+def basic_blocks(dim, index, layers, segment_dim, mlp_ratio=3., qkv_bias=True, qk_scale=None,
                  attn_drop=0, drop_path_rate=0., skip_lam=1.0, mlp_fn=WeightedPermuteMLP, **kwargs):
     blocks = []
 
     for block_idx in range(layers[index]):
-        block_dpr = drop_path_rate * (block_idx + sum(layers[:index])) / (sum(layers) - 1)
-        blocks.append(PermutatorBlock(dim, segment_dim, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale, \
+        block_dpr = drop_path_rate * \
+            (block_idx + sum(layers[:index])) / (sum(layers) - 1)
+        blocks.append(PermutatorBlock(dim, segment_dim, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
                                       attn_drop=attn_drop, drop_path=block_dpr, skip_lam=skip_lam, mlp_fn=mlp_fn))
 
     blocks = nn.Sequential(*blocks)
@@ -331,17 +367,19 @@ class HiT(nn.Module):
                 break
             if transitions[i] or embed_dims[i] != embed_dims[i + 1]:
                 patch_size = 2 if transitions[i] else 1
-                network.append(Downsample(embed_dims[i], embed_dims[i + 1], patch_size))
+                network.append(Downsample(
+                    embed_dims[i], embed_dims[i + 1], patch_size))
 
         self.network = nn.ModuleList(network)
 
         self.norm = norm_layer(embed_dims[-1])
 
         # Classifier head
-        self.head = nn.Linear(embed_dims[-1], num_classes) if num_classes > 0 else nn.Identity()
+        self.head = nn.Linear(
+            embed_dims[-1], num_classes) if num_classes > 0 else nn.Identity()
         self.apply(self._init_weights)
         self.pooling = nn.AdaptiveAvgPool2d(1)
-        #self.conv_cls_head = nn.Linear(368, num_classes)
+        # self.conv_cls_head = nn.Linear(368, num_classes)
 
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
@@ -357,7 +395,9 @@ class HiT(nn.Module):
 
     def reset_classifier(self, num_classes, global_pool=''):
         self.num_classes = num_classes
-        self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+        self.head = nn.Linear(
+            self.embed_dim,
+            num_classes) if num_classes > 0 else nn.Identity()
 
     def forward_embeddings(self, x):
         x = self.patch_embed(x)
