@@ -547,7 +547,7 @@ def main(args):
                 plt.xlabel('Predicted Label')
                 plt.title('Confusion Matrix')
                 plt.savefig(os.path.join(
-                    temp_dir, "validation_confusion_matrix.png"))
+                    temp_dir, "validation_confusion_matrix.png"), bbox_inches="tight", pad_inches=0, dpi=1200)
                 plt.close()
 
                 if (val_stats["avg_loss"] < best_val_loss):
@@ -655,15 +655,17 @@ def main(args):
             plt.imshow(npimg)
             plt.xticks([])
             plt.yticks([])
-            plt.savefig(os.path.join(temp_dir, f'{run_name}_{test_image}.png'))
+            plt.axis("off")
+            plt.savefig(os.path.join(temp_dir, f'{run_name}_{test_image}.png'), bbox_inches="tight", pad_inches=0, dpi=1200)
             plt.close()
 
             plt.figure()
             plt.imshow(npimg_prob)
             plt.xticks([])
             plt.yticks([])
+            plt.axis("off")
             plt.savefig(os.path.join(
-                temp_dir, f'{run_name}_{test_image}_prob.png'))
+                temp_dir, f'{run_name}_{test_image}_prob.png'), bbox_inches="tight", pad_inches=0, dpi=1200)
             plt.close()
 
             if args.inference:
