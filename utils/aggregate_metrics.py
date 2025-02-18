@@ -10,6 +10,13 @@ from mlflow.tracking import MlflowClient
 from prettytable import PrettyTable
 from tqdm import tqdm
 
+"""
+Steps to successfully use this script:
+1. Correct the artifact uri running the script yamlAdapt.py
+2. Open the mlflow ui and delete unwanted models
+3. Run this script to get a txt file with aggregated metrics
+"""
+
 metrics = [
     'kappa_score',
     'precision',
