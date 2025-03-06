@@ -3,7 +3,7 @@ import os
 
 import subprocess
 
-tracking_uri = "file://" + os.path.abspath("mlruns_final")
+tracking_uri = "file://" + os.path.abspath("mlruns_final_complete")
 mlflow.set_tracking_uri(tracking_uri)
 client = mlflow.tracking.MlflowClient()
 
@@ -28,7 +28,7 @@ def run_all_inferences():
                 gt_path = "/home/ragusa/HSIBrain/datasets/LP/gt/"
             else:
                 data_path = "/home/ragusa/HSIBrain/datasets/Madrid/hsi/"
-                gt_path = "/home/ragusa/HSIBrain/datasets/LP/gt/"
+                gt_path = "/home/ragusa/HSIBrain/datasets/Madrid/gt/"
 
             try:
                 command = f'conda run -n {env_name} python3 run_with_submitit.py --inference --run-id {run_id} --ngpus 1 --nodes 1 --db-name {db_name} --data-path {data_path} --gt-path {gt_path} --job-name "inference_{run_id}"'

@@ -18,6 +18,7 @@ Steps to successfully use this script:
 """
 
 metrics = [
+    'inference_time',
     'kappa_score',
     'precision',
     'recall',
@@ -38,7 +39,7 @@ def get_args_parser():
 
     parser.add_argument(
         '--trackingUri',
-        default="file://" + os.getcwd() + "/mlruns_final_prev",
+        default="file://" + os.getcwd() + "/mlruns_final_complete",
         type=str,
         help='Tracking URI')
     parser.add_argument(
@@ -71,6 +72,7 @@ def load_metrics_from_run(directory_uri):
     json_files = find_json_files_in_directory(directory_uri)
 
     metrics = {
+        "inference_time": [],
         "kappa_score": [],
         "precision": [],
         "recall": [],
@@ -89,6 +91,7 @@ def load_metrics_from_run(directory_uri):
             data = json.load(file)
 
             # Global metrics
+            metrics["inference_time"].append(data.get("inference_time", 0))
             metrics["kappa_score"].append(data.get("kappa_score", 0))
             metrics["precision"].append(data.get("precision", 0))
             metrics["recall"].append(data.get("recall", 0))
@@ -134,13 +137,15 @@ def global_metrics(model_metrics, nfolds):
 
                 aggregated_results[db_name][job_name].setdefault(
                     metric_name, {})
+                
+                multiplier = 1 if metric_name == "inference_time" else 100
 
                 if isinstance(values, list):
                     values = np.array(values)
                     filtered_values = np.where(values == -1, np.nan, values)
                     aggregated_results[db_name][job_name][metric_name] = {
-                        "mean": np.nanmean(filtered_values, axis=0) * 100,
-                        "stddev": np.nanstd(filtered_values, axis=0) * 100
+                        "mean": np.nanmean(filtered_values, axis=0) * multiplier,
+                        "stddev": np.nanstd(filtered_values, axis=0) * multiplier
                     }
                 else:
                     aggregated_results[db_name][job_name][metric_name] = {  # single value, not a list. It should never happen unless the test set has a single image
@@ -210,6 +215,7 @@ def main(args):
         "Dataset",
         "Model",
         "N. Params",
+        "Inference time (s)",
         'Kappa score',
         'Precision',
         'Recall',
@@ -300,7 +306,9 @@ def main(args):
     for db_name, jobs in gm.items():
         for job_name, job_metrics in jobs.items():
             table_global.add_row([
-                db_name, job_name, job_metrics.get('num_params', 0),
+                db_name, job_name, 
+                job_metrics.get('num_params', 0),
+                f"{job_metrics.get('inference_time', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {job_metrics.get('inference_time', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",
                 f"{job_metrics.get('kappa_score', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {job_metrics.get('kappa_score', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",
                 f"{job_metrics.get('precision', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {job_metrics.get('precision', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",
                 f"{job_metrics.get('recall', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {job_metrics.get('recall', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",

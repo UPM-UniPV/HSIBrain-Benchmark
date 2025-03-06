@@ -63,7 +63,7 @@ def get_args_parser():
     parser.add_argument('--run-id', default='4b5f59d9505a466bb6fd381b2fe993e1',
                         type=str, help='MLFlow Run ID to be used for inference')
     parser.add_argument('--tracking-uri',
-                        default="file://" + os.getcwd() + "/mlruns_final",
+                        default="file://" + os.getcwd() + "/mlruns_final_complete",
                         type=str, help='MLFlow tracking URI'
                         )
 
@@ -593,7 +593,7 @@ def main(args):
 
     # model = select_model(args)
     # model.load_state_dict(torch.load(client.download_artifacts(args.run_id, f'{args.model_type}_best_model_{run_name}.pth'), weights_only=True))
-    del model
+        del model
     model = mlflow.pytorch.load_model(f"models:/best_model_{run_name}/latest")  # load last registered model
     model.to(device)
 

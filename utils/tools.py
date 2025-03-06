@@ -71,6 +71,8 @@ def getImageProb(data, height, width):
         npimg += data[:, :, class_index][:, :,
                                          np.newaxis] * colormap[class_index]
 
+    npimg = np.clip(npimg, 0, 255) # in case of overflow
+
     return npimg.astype('uint8')
 
 
