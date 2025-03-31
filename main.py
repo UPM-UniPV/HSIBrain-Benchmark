@@ -576,8 +576,11 @@ def main(args):
 
         # log and register model
         if tools.is_main_process():
-            model.load_state_dict(torch.load(os.path.join(temp_dir, f'{args.model_type}_best_model_{run_name}.pth'))).to(device)
-            X_sample = torch.randn(1, args.channels, args.patch_size, args.patch_size).to(device)
+            model = select_model(args)     
+            model.load_state_dict(torch.load(os.path.join(temp_dir, f'{args.model_type}_best_model_{run_name}.pth')))
+            model.to(device)    
+
+            X_sample = torch.randn(2, args.channels, args.patch_size, args.patch_size).to(device)
             y_sample = model(X_sample)
             signature = mlflow.models.signature.infer_signature(
                 X_sample.cpu().numpy(), y_sample.cpu().detach().numpy())

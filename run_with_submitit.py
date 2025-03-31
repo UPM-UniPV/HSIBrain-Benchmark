@@ -94,9 +94,7 @@ class Trainer(object):
         self.args.rank = job_env.global_rank
         self.args.world_size = job_env.num_tasks
         print(
-            f"Process group: {
-                job_env.num_tasks} tasks, rank: {
-                job_env.global_rank}")
+            f"Process group: {job_env.num_tasks} tasks, rank: {job_env.global_rank}")
 
 
 def main():

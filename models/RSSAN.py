@@ -95,7 +95,7 @@ class RSSAN(nn.Module):
         self.SeAM = SpectralAttentionModule(in_chns)
         self.SaAM = SpatialAttentionModule(in_chns)
 
-        self.conv_block = nn.Sequential(nn.Conv2d(25, embed_dim, 3,
+        self.conv_block = nn.Sequential(nn.Conv2d(in_chns, embed_dim, 3,
                                                   padding=1, bias=False),
                                         nn.BatchNorm2d(embed_dim),
                                         nn.ReLU(inplace=True))
