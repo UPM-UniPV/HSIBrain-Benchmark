@@ -28,6 +28,7 @@ from engine import evaluate, test_evaluate, train_epoch
 from models.Conv.GhostNet import GhostNet
 # from models.Conv.CNN_2D import CNN_2D
 from models.DBDA import DBDA
+from models.EfficientNet import EfficientNet
 from models.HiT import ConvPermuteMLP, HiT
 from models.HSIMamba import HSIClassificationMambaModel
 from models.Hybrid3D_2D import Hyb3D_2D
@@ -213,6 +214,8 @@ def select_model(args):
     if (args.model_type == 'ViT'):
         model = ViT(patchSize=args.patch_size, nBlocks=args.blocks, mlp_dim=args.mlp_dim, caf=args.caf, easyAtt=args.easyAtt, numHeads=args.heads,
                     embedDim=args.embed_dim, numClasses=args.classes, dropout=args.drop, dropPath=args.dropPath_rate, channels=args.channels)
+    elif args.model_type == 'EfficientNet':
+        model = EfficientNet(in_dims=args.channels, out_classes=args.classes)
     elif args.model_type == 'DBDA':
         model = DBDA(band=args.channels, classes=args.classes)
     elif args.model_type == 'SpectralFormer':
@@ -294,18 +297,12 @@ def main(args):
     temp_dir = Path("./tmp")
 
     experiment_name = args.model_type
-    experiment_description = f'{
-        args.model_type} for brain tumor classification'
+    experiment_description = f'{args.model_type} for brain tumor classification'
     # args.job_name if run with submitit
-    run_name = f'{
-        args.job_name}_{
-        args.model_type}-{
-            args.db_name}-{
-                args.patch_size}-run-{
-                    datetime.now().strftime("%Y%m%d_%H%M%S")}'
-    run_description = f'Analyze the behavior of the {
-        args.model_type} using a recent version of the {
-        args.db_name} HSI dataset.'
+    run_name = f'{args.job_name}_{args.model_type}-{args.db_name}-'\
+               f'{args.patch_size}-run-{datetime.now().strftime("%Y%m%d_%H%M%S")}'
+    run_description = f'Analyze the behavior of the {args.model_type}'\
+                      f'using a recent version of the {args.db_name} HSI dataset.'
 
     if args.inference:
         run_data = None
