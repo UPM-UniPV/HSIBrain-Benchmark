@@ -19,6 +19,7 @@ Steps to successfully use this script:
 
 metrics = [
     'inference_time',
+    'time_per_pixel',
     'kappa_score',
     'precision',
     'recall',
@@ -59,6 +60,8 @@ def get_args_parser():
 
 def find_json_files_in_directory(directory_uri):
     json_files = []
+    #dic_url = urlparse(directory_uri).path
+    #dic_url = dic_url[1:] 
     directory_path = Path(urlparse(directory_uri).path)
 
     for json_file in directory_path.rglob("*.json"):
@@ -73,6 +76,7 @@ def load_metrics_from_run(directory_uri):
 
     metrics = {
         "inference_time": [],
+        "time_per_pixel":[],
         "kappa_score": [],
         "precision": [],
         "recall": [],
@@ -92,6 +96,7 @@ def load_metrics_from_run(directory_uri):
 
             # Global metrics
             metrics["inference_time"].append(data.get("inference_time", 0))
+            metrics["time_per_pixel"].append(data.get("time_per_pixel", 0)*1_000_000)
             metrics["kappa_score"].append(data.get("kappa_score", 0))
             metrics["precision"].append(data.get("precision", 0))
             metrics["recall"].append(data.get("recall", 0))
@@ -138,7 +143,7 @@ def global_metrics(model_metrics, nfolds):
                 aggregated_results[db_name][job_name].setdefault(
                     metric_name, {})
                 
-                multiplier = 1 if metric_name == "inference_time" else 100
+                multiplier = 1 if metric_name == "inference_time" or metric_name == 'time_per_pixel' else 100
 
                 if isinstance(values, list):
                     values = np.array(values)
@@ -216,6 +221,7 @@ def main(args):
         "Model",
         "N. Params",
         "Inference time (s)",
+        "Time per pixel (micro-s)",
         'Kappa score',
         'Precision',
         'Recall',
@@ -309,6 +315,7 @@ def main(args):
                 db_name, job_name, 
                 job_metrics.get('num_params', 0),
                 f"{job_metrics.get('inference_time', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {job_metrics.get('inference_time', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",
+                f"{job_metrics.get('time_per_pixel', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {job_metrics.get('time_per_pixel', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",
                 f"{job_metrics.get('kappa_score', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {job_metrics.get('kappa_score', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",
                 f"{job_metrics.get('precision', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {job_metrics.get('precision', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",
                 f"{job_metrics.get('recall', {'mean': math.nan, 'stddev': math.nan})['mean']:.2f} ± {job_metrics.get('recall', {'mean': math.nan, 'stddev': math.nan})['stddev']:.2f}",
