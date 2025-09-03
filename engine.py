@@ -246,6 +246,8 @@ def test_evaluate(data_loader, model, device, args):
 
     kappa_score, precision, recall, f1, accuracy, roc_auc, cm, per_class_accuracy, precision_class, recall_class, fscore_class, roc_per_class, support = calculate_test_metrics(
         test_preds_noback, test_labels)
+    
+    pixels = test_preds.shape[0]
 
     return torch.softmax(test_preds, dim=1), {"kappa_score": kappa_score, "precision": precision, "recall": recall, "f1score": f1, "oacc": accuracy, "rocauc": roc_auc, "cm": cm, "per_class_accuracy": per_class_accuracy,
-                                              "precision_class": precision_class, "recall_class": recall_class, "fscore_class": fscore_class, "roc_class": roc_per_class, "support": support, "inference_time": inference_time}
+                                              "precision_class": precision_class, "recall_class": recall_class, "fscore_class": fscore_class, "roc_class": roc_per_class, "support": support, "inference_time": inference_time, "time_per_pixel": inference_time/pixels, "pixels": pixels}

@@ -594,8 +594,8 @@ def main(args):
     # model = select_model(args)
     # model.load_state_dict(torch.load(client.download_artifacts(args.run_id, f'{args.model_type}_best_model_{run_name}.pth'), weights_only=True))
         del model
-    model = mlflow.pytorch.load_model(f"models:/best_model_{run_name}/latest")  # load last registered model
-    model.to(device)
+    model = mlflow.pytorch.load_model(f"models:/best_model_{run_name}/latest", map_location=torch.device("cuda:0"))  # load last registered model
+    model.to(torch.device("cuda:0"))
 
     if args.distributed:
         model = torch.nn.parallel.DistributedDataParallel(
@@ -608,7 +608,7 @@ def main(args):
             test_image, args.data_path, args.gt_path, patch_size=args.patch_size, minMaxVects=[min_vect, max_vect])
 
         hsi = torch.from_numpy(hsi).type(torch.FloatTensor)
-        gt = torch.from_numpy(gt).type(torch.LongTensor)
+        gt = torch.from_numpy(gt.astype(np.int64)).type(torch.LongTensor)
 
         dataset_test = TensorDataset(hsi, gt)
 
