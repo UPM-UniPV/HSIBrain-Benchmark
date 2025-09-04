@@ -2,7 +2,7 @@
 ![PyTorch](https://img.shields.io/badge/PyTorch-%23EE4C2C.svg?style=for-the-badge&logo=PyTorch&logoColor=white)
 ![Licence](https://img.shields.io/github/license/Ileriayo/markdown-badges?style=for-the-badge)
 
-This is an evaluation of several deep learning models for brain tumor detection through the use of hyperspectral images from the [SLIM Brain Database](https://slimbrain.citsem.upm.es/) and the [Las Palmas HSI Human Brain Database](https://hsibraindatabase.iuma.ulpgc.es/).
+Evaluation of several deep learning models for brain tumor detection through the use of hyperspectral images from the [SLIM Brain Database](https://slimbrain.citsem.upm.es/) and the [Las Palmas HSI Human Brain Database](https://hsibraindatabase.iuma.ulpgc.es/).
 
 
 **Table of Contents**
@@ -15,24 +15,30 @@ This is an evaluation of several deep learning models for brain tumor detection 
     - [Notes](#notes)
 
 ## Requirements
-- Pytorch 2.3.1 (+ all the packages in the requirements.txt file)
+- Pytorch 2.3.1 (+ all the packages in the `.yml` files)
 - Cuda 12.4 for parallelization
 
 ## Directories and Files
-* **models/** - Contains all the code for the models evaluated in this study.
-* **utils/** - There are some utils functions as well as the code for the Focal Loss and the LARC optimizer and other scripts used for evaluating the results.
 * **job_scripts/** - Contains the .sh files used to launch the training jobs on our clusters.
+* **models/** - Contains all the architectures evaluated in this study.
+* **plots/** - Conda notebooks used to generate the figures with the results.
+* **utils/** - Some useful scripts employed as well as the code for the Focal Loss and the LARC optimizer.
   
 The main train/evaluation code is contained in the `main.py` and `engine.py` files. The `run_with_submitit.py` files allow to easily sbatch a job on a Slurm cluster. The json files are the lists of the images from both the dataset used in this work.
 
 ## Related Works and Studies
-* [SpectralFormer: Rethinking Hyperspectral Image Classification with Transformers](https://arxiv.org/abs/2107.02988)
-* [Vision Mamba: Efficient Visual Representation Learning with Bidirectional State Space Model](https://arxiv.org/abs/2401.09417)
-* [HSIMamba: Hyperpsectral Imaging Efficient Feature Learning with Bidirectional State Space for Classification](https://arxiv.org/abs/2404.00272)
-* [Spectral-Spatial Mamba for Hyperspectral Image Classification](https://arxiv.org/abs/2404.18401)
-* [Hyperspectral Image Transformer Classification Networks](https://doi.org/10.1109/TGRS.2022.3171551)
-* [State space models meet transformers for hyperspectral image classification](https://doi.org/10.1016/j.sigpro.2024.109669)
-* [Easy attention: A simple attention mechanism for temporal predictions with transformers](https://arxiv.org/abs/2308.12874)
+* [The prisma 2020 statement: an updated guideline for reporting systematic reviews](https://doi.org/10.1136/bmj.n71)
+* [Hyperspectral Image Classification Using a Hybrid 3D-2D Convolutional Neural Networks](https://doi.org/10.1109/JSTARS.2021.3099118)
+* [Ghostnet for hyperspectral image classification](https://doi.org/10.1109/TGRS.2021.3050257)
+* [Litedepthwisenet: A lightweight network for hyperspectral image classification](https://doi.org/10.1109/TGRS.2021.3062372)
+* [SpectralFormer: Rethinking Hyperspectral Image Classification with Transformers](https://doi.org/10.1109/TGRS.2021.3130716)
+* [Classification of hyperspectral image based on double-branch dual-attention mechanism network](https://doi.org/doi:10.3390/rs12030582)
+* [Hyperspectral image transformer classification networks](https://doi.org/10.1109/TGRS.2022.3171551)
+* [Spectral–spatial attention network for hyperspectral image classification](https://doi.org/10.1109/TGRS.2019.2951160)
+* [Residual spectral–spatial attention network for hyperspectral image classification](https://doi.org/10.1109/TGRS.2020.2994057.)
+* [EfficientNet: Rethinking model scaling for convolutional neural networks](https://arxiv.org/abs/1905.11946)
+* [An image is worth 16x16 words: Transformers for image recognition at scale](https://arxiv.org/abs/2010.11929)
+
 
 ## Results
 All the results obtained from the tests are explained in the following paper: [Benchmarking Deep Learning Models for Hyperspectral Imaging in Tumor Detection]().
