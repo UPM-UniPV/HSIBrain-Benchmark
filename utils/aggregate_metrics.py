@@ -40,7 +40,7 @@ def get_args_parser():
 
     parser.add_argument(
         '--trackingUri',
-        default="file://" + os.getcwd() + "/mlruns_final_complete",
+        default="file://" + os.getcwd() + "/mlruns_final_merged",
         type=str,
         help='Tracking URI')
     parser.add_argument(
@@ -289,6 +289,8 @@ def main(args):
 
         for run in runs:
             db_name = run.data.params.get("db_name", None)
+            if db_name is not None:
+                db_name = db_name.lower()
             job_name = run.data.params.get("job_name", None).strip()
             seed = run.data.params.get("seed", None)
             n_params = run.data.params.get("n_parameters", 0)
