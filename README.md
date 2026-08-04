@@ -35,17 +35,24 @@ The main train/evaluation code is contained in the `main.py` and `engine.py` fil
 * [Classification of hyperspectral image based on double-branch dual-attention mechanism network](https://doi.org/doi:10.3390/rs12030582)
 * [Hyperspectral image transformer classification networks](https://doi.org/10.1109/TGRS.2022.3171551)
 * [Spectral–spatial attention network for hyperspectral image classification](https://doi.org/10.1109/TGRS.2019.2951160)
-* [Residual spectral–spatial attention network for hyperspectral image classification](https://doi.org/10.1109/TGRS.2020.2994057.)
-* [EfficientNet: Rethinking model scaling for convolutional neural networks](https://arxiv.org/abs/1905.11946)
+* [Residual spectral–spatial attention network for hyperspectral image classification](https://doi.org/10.1109/TGRS.2020.2994057)
 * [An image is worth 16x16 words: Transformers for image recognition at scale](https://arxiv.org/abs/2010.11929)
-
+* [EfficientNet: Rethinking model scaling for convolutional neural networks](https://arxiv.org/abs/1905.11946)
 
 ## Results
-All the results obtained from the tests are explained in the following paper: [Benchmarking Deep Learning Models for Hyperspectral Imaging in Tumor Detection]().
+All the results obtained from the tests are explained in the following paper: [Benchmarking Deep Learning Models for Hyperspectral Imaging in Tumor Detection](https://doi.org/10.1016/j.cmpb.2026.109571).
 
 ### Citation
-```bibtext
-
+```bibtex
+@article{2026109571,
+title = {Benchmarking deep learning architectures for hyperspectral in-vivo brain tumor segmentation},
+author = {Guillermo Vazquez and Domenico Ragusa and Emanuele Torti and Elisa Marenzi and Eduardo Juarez and Angel M. Groba and Francesco Leporati},
+journal = {Computer Methods and Programs in Biomedicine},
+pages = {109571},
+year = {2026},
+issn = {0169-2607},
+doi = {10.1016/j.cmpb.2026.109571}
+}
 ```
 
 ### Notes
