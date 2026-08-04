@@ -170,7 +170,7 @@ def get_args_parser():
     parser.add_argument('--data-path', default='/path/to/hsi_npy/',
                         type=str, help='Dataset path')
     parser.add_argument('--gt-path', default='/path/to/gt_map/',
-                        type=str, help='Dataset path')
+                        type=str, help='GT path')
     parser.add_argument('--channels', type=int, default=128,
                         help='Number of channels in the dataset')
     parser.add_argument('--train-pcg', default='0.7',
