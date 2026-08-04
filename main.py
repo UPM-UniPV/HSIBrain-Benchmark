@@ -167,12 +167,10 @@ def get_args_parser():
     # Dataset parameters
     parser.add_argument('--db-name', default='LP',
                         type=str, help='Dataset name')
-    parser.add_argument('--data-path', default='/home/domenico/Desktop/res_Guillermo/datasets/LP/hsi/',
-                        # /home/domenico/Desktop/dataset_experiments/CUBES_cal_alt/
+    parser.add_argument('--data-path', default='/path/to/hsi_npy/',
                         type=str, help='Dataset path')
-    parser.add_argument('--gt-path', default='/home/domenico/Desktop/res_Guillermo/datasets/LP/gt/',
-                        # /home/domenico/Desktop/dataset_experiments/HSI_GT/npyFiles/
-                        type=str, help='Dataset path')
+    parser.add_argument('--gt-path', default='/path/to/gt_map/',
+                        type=str, help='GT path')
     parser.add_argument('--channels', type=int, default=128,
                         help='Number of channels in the dataset')
     parser.add_argument('--train-pcg', default='0.7',
@@ -290,7 +288,6 @@ def select_model(args):
 
 def main(args):
     os.environ['MLFLOW_TRACKING_URI'] = args.tracking_uri
-    # os.environ["MLFLOW_TRACKING_URI"] = "file:///home/ragusa/HSIBrain/TEST"
     # #TEST
 
     tools.init_distributed_mode(args)
