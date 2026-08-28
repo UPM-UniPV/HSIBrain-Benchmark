@@ -5,6 +5,7 @@ Mostly copy-paste from torchvision references.
 """
 import datetime
 import os
+import re
 import random
 
 import cv2
@@ -336,6 +337,52 @@ def random_split(image_list, train_pctg, val_pctg, seed):
     test_ids = image_list[train_split + validation_split::]
 
     return train_ids, validation_ids, test_ids
+
+
+
+def random_patient_split(IDs, gt_path, val_pctg, test_pctg, seed):
+	
+
+	train_ids = []
+	validation_ids = []
+	test_ids = []
+
+	tumor_IDs, nontumor_IDs = get_tumor_IDs(IDs, gt_path)
+
+	pat_non_t = np.unique(np.array([int(re.findall("\d+", tid)[0]) for tid in tumor_IDs]))
+	pat_t = np.unique(np.array([int(re.findall("\d+", ntid)[0]) for ntid in nontumor_IDs]))
+	
+
+	pat_non_t = pat_non_t[np.invert(np.isin(pat_non_t, pat_t))]
+
+	random.Random(seed).shuffle(pat_non_t)
+	random.Random(seed).shuffle(pat_t)
+
+
+	train_pctg = 1-(test_pctg + val_pctg)
+
+	T_train_pat, T_val_pat, T_test_pat = random_split(pat_t, train_pctg,
+													  val_pctg, seed)
+	
+	train_pat, validation_pat, test_pat = random_split(pat_non_t, train_pctg,
+													   val_pctg, seed)
+
+
+	for idp in IDs:
+
+		id_pat_cap = int(re.findall("\d+", idp)[0])
+
+		if (id_pat_cap in T_train_pat) or (id_pat_cap in train_pat):
+			train_ids.append(idp)
+
+		elif (id_pat_cap in T_val_pat) or (id_pat_cap in validation_pat):
+			validation_ids.append(idp)
+
+		elif (id_pat_cap in T_test_pat) or (id_pat_cap in test_pat):
+			test_ids.append(idp)
+	
+	return train_ids, validation_ids, test_ids
+
 
 
 def check_dirs(*args):
