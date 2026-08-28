@@ -15,6 +15,7 @@ Evaluation of several deep learning models for brain tumor detection through the
     - [Notes](#notes)
 
 ## Requirements
+- Python >= 3.10
 - Pytorch 2.3.1 (+ all the packages in the `.yml` files)
 - Cuda 12.4 for parallelization
 
