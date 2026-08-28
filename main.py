@@ -379,7 +379,7 @@ def main(args):
 
     train_val_ids = []
 
-    test_pcg = args.train_pcg, args.val_pcg,
+    test_pcg = 1-(args.train_pcg+args.val_pcg)
 
     train_ids, validation_ids, test_ids = tools.random_patient_split(image_list, args.gt_path,
 																	 args.val_pcg,
