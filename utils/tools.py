@@ -126,7 +126,7 @@ def get_cube_and_GT(idp, data_path, gt_path, patch_size, minMaxVects, norm_fn):
 		data = data/l2_norm 
 
 	else:
-		raise ValueError(f"Normalization function {norm_fn} not recognized.")
+		raise ValueError(f"Normalization function '{norm_fn}' not recognized.")
 
 	H, W, C = data.shape
 	if patch_size > 1:
@@ -188,7 +188,7 @@ def loadImagesData(hsi_path, gt_path, imglist, patch_size,
 			hsi_dataset = hsi_dataset/l2_norm 
 
 		else:
-			raise ValueError(f"Normalization function {norm_fn} not recognized.")
+			raise ValueError(f"Normalization function '{norm_fn}' not recognized.")
 
 		for label in np.unique(labels)[
 				1:]:  # labels 0 -> background, assumption: each image has background
