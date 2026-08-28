@@ -79,6 +79,7 @@ def get_args_parser():
     parser.add_argument('--device', default='cuda',
                         help='Device to use for training / testing')
     parser.add_argument('--seed', default=0, type=int)
+    parser.add_argument('--norm-fn', default="l2", type=str)
 
     # ViT parameters
     parser.add_argument('--mlp-dim', default=4, type=int,
@@ -397,10 +398,14 @@ def main(args):
         args.data_path, args.gt_path, train_val_ids, args.channels)
 
     if not args.inference:
-        train_data, train_labels, train_lab_count_noDens, _ = tools.loadImagesData(
-            args.data_path, args.gt_path, train_ids, patch_size=args.patch_size, labelsToDensify=args.densify_labels, labelsToAugment=args.augment_labels, minMaxVects=[min_vect, max_vect])
-        val_data, val_labels, val_lab_count_noDens, _ = tools.loadImagesData(
-            args.data_path, args.gt_path, validation_ids, patch_size=args.patch_size, labelsToDensify=[], labelsToAugment=[], minMaxVects=[min_vect, max_vect])
+        train_data, train_labels, train_lab_count_noDens, _ = tools.loadImagesData(args.data_path, args.gt_path, train_ids,
+                                                                                   patch_size=args.patch_size, labelsToDensify=args.densify_labels,
+                                                                                   labelsToAugment=args.augment_labels, minMaxVects=[min_vect, max_vect],
+                                                                                   norm_fn=args.norm_fn)
+        val_data, val_labels, val_lab_count_noDens, _ = tools.loadImagesData(args.data_path, args.gt_path, validation_ids,
+                                                                             patch_size=args.patch_size, labelsToDensify=[],
+                                                                             labelsToAugment=[], minMaxVects=[min_vect, max_vect],
+                                                                             norm_fn=args.norm_fn)
 
         counts = train_lab_count_noDens + val_lab_count_noDens
         # unique, counts = np.unique(fnp.concatenate((train_lab_count_noDens, val_lab_count_noDens)), return_counts=True)
@@ -600,8 +605,10 @@ def main(args):
 
     # TESTING
     for test_image in test_ids:
-        hsi, gt, [height, width] = tools.get_cube_and_GT(
-            test_image, args.data_path, args.gt_path, patch_size=args.patch_size, minMaxVects=[min_vect, max_vect])
+        hsi, gt, [height, width] = tools.get_cube_and_GT(test_image, args.data_path, args.gt_path,
+                                                         patch_size=args.patch_size,
+                                                         minMaxVects=[min_vect, max_vect],
+                                                         norm_fn=args.norm_fn)
 
         hsi = torch.from_numpy(hsi).type(torch.FloatTensor)
         gt = torch.from_numpy(gt.astype(np.int64)).type(torch.LongTensor)
